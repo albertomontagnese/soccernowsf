@@ -1340,14 +1340,21 @@ function SoccerLanding() {
                 ) : (
                   <div className="grid md:grid-cols-2 gap-4">
                     {/* White Team */}
-                    <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                      <div className="bg-slate-800 px-3 py-2 flex items-center justify-between border-b border-slate-700">
+                    <div className={`rounded-xl overflow-hidden border bg-slate-900 ${whiteTeam.filter(p => p.goalkeeper).length === 0 && whiteTeam.length > 0 ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-slate-700'}`}>
+                      <div className={`px-3 py-2 flex items-center justify-between border-b ${whiteTeam.filter(p => p.goalkeeper).length === 0 && whiteTeam.length > 0 ? 'bg-red-900/30 border-red-800/50' : 'bg-slate-800 border-slate-700'}`}>
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full border-2 border-zinc-400 bg-white"></div>
                           <span className="font-bold text-white text-sm">White</span>
+                          {whiteTeam.length < darkTeam.length && whiteTeam.length > 0 && (
+                            <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">-{darkTeam.length - whiteTeam.length}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-zinc-500">🧤 {whiteTeam.filter(p => p.goalkeeper).length}</span>
+                          {whiteTeam.filter(p => p.goalkeeper).length === 0 && whiteTeam.length > 0 ? (
+                            <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold animate-pulse">🧤 NEED GK!</span>
+                          ) : (
+                            <span className="text-xs text-zinc-500">🧤 {whiteTeam.filter(p => p.goalkeeper).length}</span>
+                          )}
                           <span className={`text-sm font-medium ${whiteComplete ? 'text-emerald-400' : 'text-zinc-400'}`}>{whiteTeam.length}/8</span>
                         </div>
                       </div>
@@ -1380,14 +1387,21 @@ function SoccerLanding() {
                     </div>
 
                     {/* Dark Team */}
-                    <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                      <div className="bg-slate-800 px-3 py-2 flex items-center justify-between border-b border-slate-700">
+                    <div className={`rounded-xl overflow-hidden border bg-slate-900 ${darkTeam.filter(p => p.goalkeeper).length === 0 && darkTeam.length > 0 ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-slate-700'}`}>
+                      <div className={`px-3 py-2 flex items-center justify-between border-b ${darkTeam.filter(p => p.goalkeeper).length === 0 && darkTeam.length > 0 ? 'bg-red-900/30 border-red-800/50' : 'bg-slate-800 border-slate-700'}`}>
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full border-2 border-zinc-600 bg-zinc-800"></div>
                           <span className="font-bold text-white text-sm">Dark</span>
+                          {darkTeam.length < whiteTeam.length && darkTeam.length > 0 && (
+                            <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">-{whiteTeam.length - darkTeam.length}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-zinc-500">🧤 {darkTeam.filter(p => p.goalkeeper).length}</span>
+                          {darkTeam.filter(p => p.goalkeeper).length === 0 && darkTeam.length > 0 ? (
+                            <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold animate-pulse">🧤 NEED GK!</span>
+                          ) : (
+                            <span className="text-xs text-zinc-500">🧤 {darkTeam.filter(p => p.goalkeeper).length}</span>
+                          )}
                           <span className={`text-sm font-medium ${darkComplete ? 'text-emerald-400' : 'text-zinc-400'}`}>{darkTeam.length}/8</span>
                         </div>
                       </div>
