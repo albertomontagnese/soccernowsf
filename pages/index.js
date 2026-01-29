@@ -831,7 +831,7 @@ function SoccerLanding() {
 
   const setActiveSection = (section) => {
     router.push({
-      pathname: '/soccer',
+      pathname: '/',
       query: section === 'history' ? { tab: 'history' } : {}
     }, undefined, { shallow: true });
   };
