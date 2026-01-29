@@ -1,0 +1,28 @@
+{
+  "name": "soccernowsf",
+  "version": "1.0.0",
+  "description": "Soccer Now SF - Thursday pickup soccer in San Francisco",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "author": "Alberto Montagnese",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0",
+    "cookie": "^1.1.1",
+    "next": "13.1.1",
+    "react": "18",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.0.4",
+    "postcss": "^8.1.10",
+    "tailwindcss": "^3.4.0"
+  }
+}
