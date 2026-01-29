@@ -2,6 +2,11 @@ import { getVotesCollection } from "../../helpers/firestoreClient";
 import { serialize, parse } from 'cookie';
 import crypto from 'crypto';
 
+// Games to exclude from overall ratings calculation (e.g., test games)
+const EXCLUDED_GAME_IDS = [
+  '2026-01-22', // Test game with mocked data
+];
+
 // Cookie settings
 const RATING_COOKIE_NAME = 'soccer_ratings';
 const VOTER_ID_COOKIE_NAME = 'soccer_voter_id';
@@ -91,6 +96,13 @@ export default async function handler(req, res) {
         
         snapshot.docs.forEach(doc => {
           const vote = doc.data();
+          
+          // Skip votes from excluded games (test games) for overall leaderboard
+          // Only apply this filter when calculating overall leaderboard (no specific gameId)
+          if (!leaderboardGameId && EXCLUDED_GAME_IDS.includes(vote.gameId)) {
+            return;
+          }
+          
           const playerId = vote.playerName;
           const rating = vote.rating || 0;
           
