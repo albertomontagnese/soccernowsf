@@ -1,3 +1,32 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* MUI Table styles for soccer pages */
+.view-mode .MuiTableCell-root {
+  padding: 2px !important;
+}
+.MuiTableHead-root .MuiTableCell-root {
+  font-weight: bold !important;
+}
+.MuiTableRow-root.dark-team {
+  background-color: lightgray !important;
+}
+.MuiTableRow-root.not-paid {
+  border: 2px solid red;
+}
+.MuiTableRow-root.not-paid .MuiTableCell-root {
+  color: red !important;
+}
+.MuiTableRow-root.cur-id-1 {
+  border-top: 2px solid black;
+}
+.view-mode.MuiContainer-root {
+  padding: 0 !important;
+}
+.MuiDialogContent-root .MuiTextField-root {
+  width: 300px;
+}
+.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeMedium {
+  padding: 4px !important;
+}
