@@ -1277,224 +1277,293 @@ function SoccerLanding() {
               </div>
             </div>
 
-            {/* This Week's Game Header */}
-            <div className="text-center py-4 relative z-10">
-              <h2 className="text-xl font-bold text-emerald-300">🏆 This Week&apos;s Game</h2>
-              <p className="text-zinc-400 mt-1">{getUpcomingThursday()}</p>
-            </div>
-
-            {/* Status Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
-              <StatusCard label="White" value={`${whiteTeam.length}/8`} ok={whiteComplete} />
-              <StatusCard label="Dark" value={`${darkTeam.length}/8`} ok={darkComplete} />
-              <StatusCard label="Keepers" value={goalkeepers} ok={goalkeepers >= 2} />
-              <StatusCard label="All Paid" value={allPaid ? "Yes" : "No"} ok={allPaid} />
-            </div>
-
-            {/* Vegas Odds */}
-            {currentOdds && (currentOdds.whiteTeam.players.length > 0 || currentOdds.darkTeam.players.length > 0) && (
-              <OddsDisplay 
-                whiteOdds={currentOdds.whiteTeam.winProbability}
-                darkOdds={currentOdds.darkTeam.winProbability}
-                whiteRating={currentOdds.whiteTeam.avgRating}
-                darkRating={currentOdds.darkTeam.avgRating}
-              />
-            )}
-
-            {/* Teams */}
-            {isLoading ? (
-              <div className="text-center py-12 relative z-10">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent mx-auto"></div>
-                <p className="text-zinc-500 mt-4">Loading...</p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-6 relative z-10">
-                {/* White Team */}
-                <div className="rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
-                  <div className="bg-slate-800 px-4 py-3 flex items-center justify-between border-b border-slate-700">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full border-2 border-zinc-400 bg-white shadow-sm"></div>
-                      <span className="font-bold text-white">White Team</span>
+            {/* ========== THIS WEEK'S MATCH CONTAINER ========== */}
+            <div className="bg-slate-900/80 rounded-3xl border border-emerald-900/40 backdrop-blur overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+              
+              {/* Match Header */}
+              <div className="bg-emerald-500/10 border-b border-emerald-900/30 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🏆</span>
+                    <div>
+                      <h2 className="text-lg font-bold text-emerald-300">This Week&apos;s Match</h2>
+                      <p className="text-zinc-400 text-sm">{getUpcomingThursday()}</p>
                     </div>
-                    <span className="text-zinc-400 font-medium">{whiteTeam.length}/8</span>
                   </div>
-                  <div className="bg-gray-100">
-                    {whiteTeam.length === 0 ? (
-                      <p style={{ color: '#6b7280' }} className="text-center py-6">No players yet</p>
+                  {/* Compact Stats */}
+                  <div className="hidden sm:flex items-center gap-3 text-sm">
+                    <span className={`px-2 py-1 rounded ${whiteComplete && darkComplete ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                      {whiteTeam.length + darkTeam.length}/16 players
+                    </span>
+                    <span className={`px-2 py-1 rounded ${goalkeepers >= 2 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      🧤 {goalkeepers}/2
+                    </span>
+                    <span className={`px-2 py-1 rounded ${allPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {allPaid ? '✓ All Paid' : `${payments.filter(p => !p.paid).length} unpaid`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vegas Odds - Compact */}
+              {currentOdds && (currentOdds.whiteTeam.players.length > 0 || currentOdds.darkTeam.players.length > 0) && (
+                <div className="px-4 py-3 border-b border-slate-800/50 bg-slate-900/50">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">🎰</span>
+                      <span className="text-xs text-zinc-500">Vegas Says</span>
+                    </div>
+                    <div className="flex-1 flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">⬜ {currentOdds.whiteTeam.winProbability}%</span>
+                      <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden flex">
+                        <div className="bg-white h-full" style={{ width: `${currentOdds.whiteTeam.winProbability}%` }} />
+                        <div className="bg-zinc-700 h-full" style={{ width: `${currentOdds.darkTeam.winProbability}%` }} />
+                      </div>
+                      <span className="text-white font-bold text-sm">{currentOdds.darkTeam.winProbability}% ⬛</span>
+                    </div>
+                    {currentOdds.whiteTeam.winProbability !== currentOdds.darkTeam.winProbability && (
+                      <span className="text-xs text-emerald-400">
+                        {currentOdds.whiteTeam.winProbability > currentOdds.darkTeam.winProbability ? '⬜ fav' : '⬛ fav'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Teams Grid */}
+              <div className="p-4">
+                {isLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent mx-auto"></div>
+                    <p className="text-zinc-500 mt-4">Loading...</p>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* White Team */}
+                    <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+                      <div className="bg-slate-800 px-3 py-2 flex items-center justify-between border-b border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full border-2 border-zinc-400 bg-white"></div>
+                          <span className="font-bold text-white text-sm">White</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-500">🧤 {whiteTeam.filter(p => p.goalkeeper).length}</span>
+                          <span className={`text-sm font-medium ${whiteComplete ? 'text-emerald-400' : 'text-zinc-400'}`}>{whiteTeam.length}/8</span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-100">
+                        {whiteTeam.length === 0 ? (
+                          <p style={{ color: '#6b7280' }} className="text-center py-4 text-sm">No players yet</p>
+                        ) : (
+                          whiteTeam.map((player, i) => (
+                            <div key={player.id || i} className="flex items-center px-3 py-2 border-b border-gray-200 last:border-0 bg-white">
+                              <span className="w-5 text-xs" style={{ color: '#9ca3af' }}>{i + 1}</span>
+                              <span className="flex-1 font-medium text-sm" style={{ color: '#111827' }}>
+                                {player.goalkeeper && "🧤 "}{player.name}
+                              </span>
+                              {player.paid ? (
+                                <span style={{ color: '#059669' }} className="font-bold text-sm">✓</span>
+                              ) : (
+                                <a 
+                                  href={`${GAME_CONFIG.venmoLink}&note=soccer-${player.name.split(' ')[0]}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded hover:bg-red-200 transition"
+                                >
+                                  Pay $7
+                                </a>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dark Team */}
+                    <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+                      <div className="bg-slate-800 px-3 py-2 flex items-center justify-between border-b border-slate-700">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full border-2 border-zinc-600 bg-zinc-800"></div>
+                          <span className="font-bold text-white text-sm">Dark</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-500">🧤 {darkTeam.filter(p => p.goalkeeper).length}</span>
+                          <span className={`text-sm font-medium ${darkComplete ? 'text-emerald-400' : 'text-zinc-400'}`}>{darkTeam.length}/8</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-900">
+                        {darkTeam.length === 0 ? (
+                          <p className="text-zinc-500 text-center py-4 text-sm">No players yet</p>
+                        ) : (
+                          darkTeam.map((player, i) => (
+                            <div key={player.id || i} className="flex items-center px-3 py-2 border-b border-slate-800 last:border-0">
+                              <span className="w-5 text-zinc-600 text-xs">{i + 1}</span>
+                              <span className="flex-1 text-white font-medium text-sm">
+                                {player.goalkeeper && "🧤 "}{player.name}
+                              </span>
+                              {player.paid ? (
+                                <span className="text-emerald-400 font-bold text-sm">✓</span>
+                              ) : (
+                                <a 
+                                  href={`${GAME_CONFIG.venmoLink}&note=soccer-${player.name.split(' ')[0]}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs bg-red-900/50 text-red-400 px-2 py-0.5 rounded hover:bg-red-900/70 transition"
+                                >
+                                  Pay $7
+                                </a>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Waitlist */}
+                {waitlist.length > 0 && (
+                  <div className="mt-4 bg-amber-900/20 border border-amber-700/40 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 border-b border-amber-700/40">
+                      <span className="font-bold text-amber-400 text-sm">🚧 Waitlist ({waitlist.length})</span>
+                    </div>
+                    <div>
+                      {waitlist.map((player, i) => (
+                        <div key={player.id || i} className="flex items-center px-3 py-2 border-b border-amber-700/30 last:border-0 text-sm">
+                          <span className="w-5 text-amber-600 text-xs">{i + 1}</span>
+                          <span className="flex-1 text-amber-100">{player.name}</span>
+                          <span className="text-amber-500 text-xs">{player.team}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Unpaid Players Callout */}
+                {payments.filter(p => !p.paid).length > 0 && (
+                  <div className="mt-4 bg-red-900/20 border border-red-700/40 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">💸</span>
+                      <div className="flex-1">
+                        <h4 className="text-red-400 font-bold text-sm mb-2">Payment Needed</h4>
+                        <p className="text-red-300/80 text-sm mb-3">
+                          {payments.filter(p => !p.paid).map(p => p.name).join(', ')} — please pay $7 to confirm your spot!
+                        </p>
+                        <a
+                          href={GAME_CONFIG.venmoLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 bg-[#008CFF] hover:bg-[#0070CC] text-white font-semibold py-2 px-4 rounded-lg text-sm transition"
+                        >
+                          💳 Pay via Venmo
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Live Chat - Inside Match Container */}
+              <div className="border-t border-slate-800/80">
+                <div className="px-4 py-3 flex items-center justify-between bg-slate-900/50">
+                  <h3 className="font-bold text-white flex items-center gap-2 text-sm">
+                    <span>💬</span>
+                    Match Chat
+                    <span className="text-zinc-500 font-normal">({liveComments.length})</span>
+                  </h3>
+                  <span className="text-xs text-emerald-400 animate-pulse">● Live</span>
+                </div>
+                
+                <div className="px-4 pb-4">
+                  {/* Comment Form */}
+                  <form onSubmit={handleSubmitLiveComment} className="mb-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={newComment.name}
+                        onChange={(e) => setNewComment({ ...newComment, name: e.target.value })}
+                        maxLength={50}
+                        className="w-24 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Say something..."
+                        value={newComment.content}
+                        onChange={(e) => setNewComment({ ...newComment, content: e.target.value })}
+                        maxLength={500}
+                        className="flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSubmittingComment || !newComment.name.trim() || !newComment.content.trim()}
+                        className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:cursor-not-allowed text-slate-950 px-3 py-1.5 rounded-lg font-medium text-sm transition"
+                      >
+                        {isSubmittingComment ? '...' : 'Send'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Comments List */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {liveComments.length === 0 ? (
+                      <p className="text-zinc-500 text-center py-3 text-xs">No messages yet. Start the conversation!</p>
                     ) : (
-                      whiteTeam.map((player, i) => (
-                        <div key={player.id || i} className="flex items-center px-4 py-2.5 border-b border-gray-200 last:border-0 bg-white">
-                          <span className="w-6 text-sm" style={{ color: '#6b7280' }}>{i + 1}</span>
-                          <span className="flex-1 font-medium" style={{ color: '#111827' }}>
-                            {player.goalkeeper && "🧤 "}{player.name}
-                          </span>
-                          {player.paid ? (
-                            <span style={{ color: '#059669' }} className="font-bold">✓</span>
-                          ) : (
-                            <span style={{ color: '#ef4444' }} className="text-sm">unpaid</span>
-                          )}
+                      liveComments.map((comment) => (
+                        <div key={comment.id} className="bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700/50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-medium text-sm">{comment.authorName}</span>
+                              <span className="text-zinc-500 text-xs">
+                                {new Date(comment.createdAt).toLocaleTimeString('en-US', {
+                                  hour: 'numeric', minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteLiveComment(comment.id)}
+                              className="text-zinc-600 hover:text-red-400 text-xs transition"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <p className="text-zinc-300 text-sm mt-0.5">{comment.content}</p>
                         </div>
                       ))
                     )}
                   </div>
                 </div>
-
-                {/* Dark Team */}
-                <div className="rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
-                  <div className="bg-slate-800 px-4 py-3 flex items-center justify-between border-b border-slate-700">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full border-2 border-zinc-600 bg-zinc-800 shadow-sm"></div>
-                      <span className="font-bold text-white">Dark Team</span>
-                    </div>
-                    <span className="text-zinc-400 font-medium">{darkTeam.length}/8</span>
-                  </div>
-                  <div className="bg-slate-900">
-                    {darkTeam.length === 0 ? (
-                      <p className="text-zinc-500 text-center py-6">No players yet</p>
-                    ) : (
-                      darkTeam.map((player, i) => (
-                        <div key={player.id || i} className="flex items-center px-4 py-2.5 border-b border-slate-800 last:border-0">
-                          <span className="w-6 text-zinc-500 text-sm">{i + 1}</span>
-                          <span className="flex-1 text-white font-medium">
-                            {player.goalkeeper && "🧤 "}{player.name}
-                          </span>
-                          {player.paid ? (
-                            <span className="text-emerald-400 font-bold">✓</span>
-                          ) : (
-                            <span className="text-zinc-500 text-sm">unpaid</span>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
               </div>
-            )}
+            </div>
 
-            {/* Waitlist */}
-            {waitlist.length > 0 && (
-              <div className="bg-amber-900/20 border border-amber-700/40 rounded-2xl overflow-hidden backdrop-blur">
-                <div className="px-4 py-3 border-b border-amber-700/40">
-                  <span className="font-bold text-amber-400">🚧 Waitlist ({waitlist.length})</span>
-                </div>
-                <div>
-                  {waitlist.map((player, i) => (
-                    <div key={player.id || i} className="flex items-center px-4 py-2.5 border-b border-amber-700/30 last:border-0">
-                      <span className="w-6 text-amber-600 text-sm">{i + 1}</span>
-                      <span className="flex-1 text-amber-100">{player.name}</span>
-                      <span className="text-amber-500 text-sm">{player.team}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Location */}
-            <div className="bg-slate-900/70 rounded-2xl overflow-hidden border border-emerald-900/30 backdrop-blur">
-              <div className="px-5 py-5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
-                    <span className="text-2xl">📍</span>
-                  </div>
+            {/* Location - Compact */}
+            <div className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-800/50 backdrop-blur">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📍</span>
                   <div>
-                    <h3 className="font-bold text-white text-lg">{GAME_CONFIG.location}</h3>
-                    <p className="text-zinc-400 text-sm">San Francisco, CA</p>
+                    <h3 className="font-bold text-white text-sm">{GAME_CONFIG.location}</h3>
+                    <p className="text-zinc-500 text-xs">San Francisco, CA</p>
                   </div>
                 </div>
                 <a
                   href="https://www.google.com/maps/search/?api=1&query=Garfield+Square+San+Francisco"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-300 hover:text-emerald-200 px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-700 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-medium transition"
                 >
-                  Directions
-                  <span>→</span>
+                  Directions →
                 </a>
               </div>
               <iframe
                 src="https://maps.google.com/maps?q=Garfield+Square+San+Francisco+CA&t=&z=15&ie=UTF8&iwloc=&output=embed"
                 width="100%"
-                height="220"
-                style={{ border: 0 }}
+                height="120"
+                style={{ border: 0, opacity: 0.8 }}
                 loading="lazy"
               />
-            </div>
-
-            {/* Live Chat Section */}
-            <div className="bg-slate-900/70 rounded-2xl overflow-hidden border border-emerald-900/30 backdrop-blur">
-              <div className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                  <span className="text-xl">💬</span>
-                  Live Chat
-                  <span className="text-zinc-500 font-normal text-sm">({liveComments.length})</span>
-                </h3>
-                <span className="text-xs text-emerald-400 animate-pulse">● Live</span>
-              </div>
-              
-              <div className="p-4">
-                {/* Comment Form */}
-                <form onSubmit={handleSubmitLiveComment} className="mb-4">
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      placeholder="Your name"
-                      value={newComment.name}
-                      onChange={(e) => setNewComment({ ...newComment, name: e.target.value })}
-                      maxLength={50}
-                      className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                      style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <textarea
-                      placeholder="Say something about this week's game..."
-                      value={newComment.content}
-                      onChange={(e) => setNewComment({ ...newComment, content: e.target.value })}
-                      maxLength={500}
-                      rows={2}
-                      className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
-                      style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isSubmittingComment || !newComment.name.trim() || !newComment.content.trim()}
-                      className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:cursor-not-allowed text-slate-950 px-4 py-2 rounded-lg font-medium text-sm transition"
-                    >
-                      {isSubmittingComment ? '...' : 'Send'}
-                    </button>
-                  </div>
-                </form>
-
-                {/* Comments List */}
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {liveComments.length === 0 ? (
-                    <p className="text-zinc-500 text-center py-4 text-sm">No messages yet. Start the conversation!</p>
-                  ) : (
-                    liveComments.map((comment) => (
-                      <div key={comment.id} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-white font-medium text-sm">{comment.authorName}</span>
-                            <span className="text-zinc-500 text-xs">
-                              {new Date(comment.createdAt).toLocaleDateString('en-US', {
-                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteLiveComment(comment.id)}
-                            className="text-zinc-600 hover:text-red-400 text-xs transition"
-                            title="Delete"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <p className="text-zinc-300 text-sm">{comment.content}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
             </div>
 
           </main>
