@@ -65,36 +65,80 @@ function isGameInProgress() {
   return false;
 }
 
-// Odds Display Component
-function OddsDisplay({ whiteOdds, darkOdds }) {
+// Odds Display Component - Enhanced Vegas Style
+function OddsDisplay({ whiteOdds, darkOdds, whiteRating, darkRating }) {
+  const favorite = whiteOdds > darkOdds ? 'white' : whiteOdds < darkOdds ? 'dark' : null;
+  
   return (
-    <div className="bg-slate-900/70 rounded-2xl p-4 border border-emerald-900/30 backdrop-blur">
-      <h4 className="text-sm font-medium text-emerald-200/80 mb-3 text-center">🎰 Vegas Says...</h4>
-      <div className="flex items-center justify-center gap-4">
-        <div className="flex-1 text-center">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-white border border-zinc-300"></div>
-            <span className="text-white font-medium text-sm">White</span>
+    <div className="bg-slate-900/70 rounded-2xl p-5 border border-emerald-900/30 backdrop-blur shadow-[0_8px_32px_rgba(16,185,129,0.1)]">
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <span className="text-2xl">🎰</span>
+        <h4 className="text-lg font-bold text-emerald-300">Vegas Says...</h4>
+      </div>
+      
+      <div className="flex items-center justify-center gap-6 mb-4">
+        {/* White Team */}
+        <div className={`flex-1 text-center p-4 rounded-xl transition ${favorite === 'white' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-slate-800/50'}`}>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="w-4 h-4 rounded-full bg-white border-2 border-zinc-300 shadow-sm"></div>
+            <span className="text-white font-bold">White</span>
+            {favorite === 'white' && <span className="text-xs text-emerald-400">★ FAV</span>}
           </div>
-          <div className="text-2xl font-bold text-white">{whiteOdds}%</div>
+          <div className={`text-4xl font-black ${favorite === 'white' ? 'text-emerald-400' : 'text-white'}`}>
+            {whiteOdds}%
+          </div>
+          {whiteRating && (
+            <div className="text-xs text-zinc-500 mt-1">Rating: {whiteRating}</div>
+          )}
         </div>
         
-        <span className="text-zinc-500 font-bold">VS</span>
+        <div className="flex flex-col items-center">
+          <span className="text-zinc-600 font-black text-xl">VS</span>
+        </div>
         
-        <div className="flex-1 text-center">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-zinc-700 border border-zinc-500"></div>
-            <span className="text-white font-medium text-sm">Dark</span>
+        {/* Dark Team */}
+        <div className={`flex-1 text-center p-4 rounded-xl transition ${favorite === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-slate-800/50'}`}>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="w-4 h-4 rounded-full bg-zinc-800 border-2 border-zinc-600 shadow-sm"></div>
+            <span className="text-white font-bold">Dark</span>
+            {favorite === 'dark' && <span className="text-xs text-emerald-400">★ FAV</span>}
           </div>
-          <div className="text-2xl font-bold text-white">{darkOdds}%</div>
+          <div className={`text-4xl font-black ${favorite === 'dark' ? 'text-emerald-400' : 'text-white'}`}>
+            {darkOdds}%
+          </div>
+          {darkRating && (
+            <div className="text-xs text-zinc-500 mt-1">Rating: {darkRating}</div>
+          )}
         </div>
       </div>
       
-      {/* Odds Bar */}
-      <div className="mt-3 h-2 bg-slate-800 rounded-full overflow-hidden flex">
-        <div className="bg-white h-full transition-all" style={{ width: `${whiteOdds}%` }} />
-        <div className="bg-slate-950 h-full transition-all" style={{ width: `${darkOdds}%` }} />
+      {/* Enhanced Odds Bar */}
+      <div className="relative">
+        <div className="h-3 bg-slate-800 rounded-full overflow-hidden flex shadow-inner">
+          <div 
+            className="bg-gradient-to-r from-zinc-200 to-white h-full transition-all duration-500" 
+            style={{ width: `${whiteOdds}%` }} 
+          />
+          <div 
+            className="bg-gradient-to-r from-zinc-700 to-zinc-900 h-full transition-all duration-500" 
+            style={{ width: `${darkOdds}%` }} 
+          />
+        </div>
+        {/* Center marker */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-emerald-400/50"></div>
       </div>
+      
+      {/* Matchup insight */}
+      {favorite && Math.abs(whiteOdds - darkOdds) >= 5 && (
+        <p className="text-center text-xs text-zinc-500 mt-3">
+          {favorite === 'white' ? '⬜ White' : '⬛ Dark'} favored by {Math.abs(whiteOdds - darkOdds).toFixed(1)} points
+        </p>
+      )}
+      {!favorite && (
+        <p className="text-center text-xs text-emerald-400/70 mt-3">
+          ⚖️ Even matchup — This one&apos;s a coin flip!
+        </p>
+      )}
     </div>
   );
 }
@@ -840,6 +884,12 @@ function SoccerLanding() {
   const [expandedGameId, setExpandedGameId] = useState(null);
   const [leaderboard, setLeaderboard] = useState({ bestPlayers: [], worstPlayers: [] });
   const [currentOdds, setCurrentOdds] = useState(null);
+  
+  // Live chat state for current game
+  const [liveComments, setLiveComments] = useState([]);
+  const [newComment, setNewComment] = useState({ name: '', content: '' });
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [savedCommenterName, setSavedCommenterName] = useState('');
 
   // Get active section from URL query param
   const activeSection = router.query.tab === 'history' ? 'history' : 'current';
@@ -856,7 +906,79 @@ function SoccerLanding() {
     fetchCurrentOdds();
     fetchGameHistory();
     fetchLeaderboard();
+    
+    // Load saved commenter name
+    const name = localStorage.getItem('soccer_commenter_name') || '';
+    setSavedCommenterName(name);
+    setNewComment(prev => ({ ...prev, name }));
   }, []);
+  
+  // Fetch live comments for current game
+  useEffect(() => {
+    const gameId = getCurrentThursdayId();
+    fetchLiveComments(gameId);
+    
+    // Poll for new comments every 30 seconds
+    const interval = setInterval(() => fetchLiveComments(gameId), 30000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  const fetchLiveComments = async (gameId) => {
+    try {
+      const res = await fetch(`/api/comments?gameId=${gameId}`);
+      const data = await res.json();
+      setLiveComments(data.comments || []);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    }
+  };
+  
+  const handleSubmitLiveComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.name.trim() || !newComment.content.trim()) return;
+    
+    setIsSubmittingComment(true);
+    try {
+      localStorage.setItem('soccer_commenter_name', newComment.name.trim());
+      
+      const gameId = getCurrentThursdayId();
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId,
+          authorName: newComment.name,
+          content: newComment.content
+        })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.comment) {
+        setLiveComments(prev => [data.comment, ...prev]);
+      }
+      setNewComment({ name: newComment.name, content: '' });
+    } catch (error) {
+      console.error('Error posting comment:', error);
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+  
+  const handleDeleteLiveComment = async (commentId) => {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId })
+      });
+      if (res.ok) {
+        setLiveComments(prev => prev.filter(c => c.id !== commentId));
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
+  };
 
   const fetchPaymentsData = async () => {
     try {
@@ -989,6 +1111,55 @@ function SoccerLanding() {
               ].join(", ")
             }}
           />
+          
+          {/* Floating Soccer Balls - Parallax Effect */}
+          <div className="absolute inset-0 overflow-hidden">
+            {/* Large ball - slow drift */}
+            <div 
+              className="absolute animate-float-slow opacity-[0.04]"
+              style={{ top: '10%', left: '5%' }}
+            >
+              <svg width="200" height="200" viewBox="0 0 100 100" fill="none">
+                <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="1" className="text-emerald-400"/>
+                <path d="M50 2 L50 20 M50 80 L50 98 M2 50 L20 50 M80 50 L98 50" stroke="currentColor" strokeWidth="0.5" className="text-emerald-400"/>
+                <polygon points="50,20 35,45 65,45" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-emerald-400"/>
+                <polygon points="50,80 35,55 65,55" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-emerald-400"/>
+                <polygon points="20,50 45,35 45,65" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-emerald-400"/>
+                <polygon points="80,50 55,35 55,65" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-emerald-400"/>
+              </svg>
+            </div>
+            
+            {/* Medium ball - medium drift */}
+            <div 
+              className="absolute animate-float-medium opacity-[0.03]"
+              style={{ top: '60%', right: '8%' }}
+            >
+              <svg width="120" height="120" viewBox="0 0 100 100" fill="none">
+                <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="1.5" className="text-white"/>
+                <path d="M50 2 L50 20 M50 80 L50 98 M2 50 L20 50 M80 50 L98 50" stroke="currentColor" strokeWidth="0.5" className="text-white"/>
+                <polygon points="50,20 35,45 65,45" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white"/>
+                <polygon points="50,80 35,55 65,55" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white"/>
+              </svg>
+            </div>
+            
+            {/* Small ball - fast drift */}
+            <div 
+              className="absolute animate-float-fast opacity-[0.05]"
+              style={{ top: '30%', right: '20%' }}
+            >
+              <svg width="60" height="60" viewBox="0 0 100 100" fill="none">
+                <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="2" className="text-emerald-300"/>
+              </svg>
+            </div>
+            
+            {/* Golden Gate silhouette hint */}
+            <div 
+              className="absolute bottom-0 left-0 right-0 h-32 opacity-[0.03]"
+              style={{
+                background: 'linear-gradient(to top, rgba(16,185,129,0.1), transparent)',
+              }}
+            />
+          </div>
         </div>
         
         {/* Header */}
@@ -1125,6 +1296,8 @@ function SoccerLanding() {
               <OddsDisplay 
                 whiteOdds={currentOdds.whiteTeam.winProbability}
                 darkOdds={currentOdds.darkTeam.winProbability}
+                whiteRating={currentOdds.whiteTeam.avgRating}
+                darkRating={currentOdds.darkTeam.avgRating}
               />
             )}
 
@@ -1245,6 +1418,83 @@ function SoccerLanding() {
                 style={{ border: 0 }}
                 loading="lazy"
               />
+            </div>
+
+            {/* Live Chat Section */}
+            <div className="bg-slate-900/70 rounded-2xl overflow-hidden border border-emerald-900/30 backdrop-blur">
+              <div className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <span className="text-xl">💬</span>
+                  Live Chat
+                  <span className="text-zinc-500 font-normal text-sm">({liveComments.length})</span>
+                </h3>
+                <span className="text-xs text-emerald-400 animate-pulse">● Live</span>
+              </div>
+              
+              <div className="p-4">
+                {/* Comment Form */}
+                <form onSubmit={handleSubmitLiveComment} className="mb-4">
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={newComment.name}
+                      onChange={(e) => setNewComment({ ...newComment, name: e.target.value })}
+                      maxLength={50}
+                      className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <textarea
+                      placeholder="Say something about this week's game..."
+                      value={newComment.content}
+                      onChange={(e) => setNewComment({ ...newComment, content: e.target.value })}
+                      maxLength={500}
+                      rows={2}
+                      className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
+                      style={{ backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSubmittingComment || !newComment.name.trim() || !newComment.content.trim()}
+                      className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:cursor-not-allowed text-slate-950 px-4 py-2 rounded-lg font-medium text-sm transition"
+                    >
+                      {isSubmittingComment ? '...' : 'Send'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Comments List */}
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {liveComments.length === 0 ? (
+                    <p className="text-zinc-500 text-center py-4 text-sm">No messages yet. Start the conversation!</p>
+                  ) : (
+                    liveComments.map((comment) => (
+                      <div key={comment.id} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white font-medium text-sm">{comment.authorName}</span>
+                            <span className="text-zinc-500 text-xs">
+                              {new Date(comment.createdAt).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteLiveComment(comment.id)}
+                            className="text-zinc-600 hover:text-red-400 text-xs transition"
+                            title="Delete"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <p className="text-zinc-300 text-sm">{comment.content}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
           </main>
