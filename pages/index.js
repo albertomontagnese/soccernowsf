@@ -3,6 +3,9 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { noCacheHeaders } from "../helpers/misc";
 
+// Test games to mark in the UI (excluded from overall ratings)
+const TEST_GAME_IDS = ['2026-01-22'];
+
 // Game configuration
 const GAME_CONFIG = {
   day: "Thursday",
@@ -203,6 +206,7 @@ function GameCard({ game, isExpanded, onToggle }) {
   const [scoreInput, setScoreInput] = useState({ white: '', dark: '' });
 
   const isCurrent = game.isCurrent === true;
+  const isTestGame = TEST_GAME_IDS.includes(game.id) || TEST_GAME_IDS.includes(game.gameDate);
   const gameInProgress = isCurrent && isGameInProgress();
   const canRate = !gameInProgress; // Can only rate after game is over (8pm Thursday)
 
@@ -389,15 +393,18 @@ function GameCard({ game, isExpanded, onToggle }) {
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-900/80 transition"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xl">{isCurrent ? '🔴' : '📅'}</span>
+          <span className="text-xl">{isCurrent ? '🔴' : isTestGame ? '🧪' : '📅'}</span>
           <div className="text-left">
             <div className="flex items-center gap-2">
               <span className="text-white font-medium">{formatDate(game.gameDate)}</span>
               {isCurrent && (
                 <span className="text-xs bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">LIVE</span>
               )}
+              {isTestGame && (
+                <span className="text-xs bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">TEST</span>
+              )}
             </div>
-            <span className="text-zinc-400 text-sm">{game.totalPlayers} players</span>
+            <span className="text-zinc-400 text-sm">{game.totalPlayers} players{isTestGame && ' • Not counted in overall ratings'}</span>
           </div>
         </div>
         
@@ -414,8 +421,16 @@ function GameCard({ game, isExpanded, onToggle }) {
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-slate-800/80">
+          {/* Test game notice */}
+          {isTestGame && (
+            <div className="border-b px-4 py-3 text-center bg-amber-900/20 border-amber-700/40">
+              <p className="text-sm text-amber-400">
+                🧪 Test game — Ratings from this game are not included in overall player rankings
+              </p>
+            </div>
+          )}
           {/* Current game notice */}
-          {isCurrent && (
+          {isCurrent && !isTestGame && (
             <div className={`border-b px-4 py-3 text-center ${gameInProgress ? 'bg-amber-900/20 border-amber-700/40' : 'bg-emerald-900/20 border-emerald-700/40'}`}>
               <p className={`text-sm ${gameInProgress ? 'text-amber-400' : 'text-emerald-400'}`}>
                 {gameInProgress 
