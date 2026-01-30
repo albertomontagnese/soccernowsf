@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { noCacheHeaders } from "../helpers/misc";
+import { trackEvent } from "./_app";
 
 // Test games to mark in the UI (excluded from overall ratings)
 const TEST_GAME_IDS = ['2026-01-22'];
@@ -48,20 +49,20 @@ function getCurrentThursdayId() {
   return thursday.toISOString().split('T')[0];
 }
 
-// Check if current game is still in progress (before 8pm PST Thursday)
+// Check if current game is still in progress (before 8pm Pacific Thursday)
 function isGameInProgress() {
   const now = new Date();
-  const pstOffset = -8 * 60; // PST offset in minutes
-  const localOffset = now.getTimezoneOffset();
-  const pstNow = new Date(now.getTime() + (localOffset + pstOffset) * 60000);
   
-  const day = pstNow.getDay();
-  const hour = pstNow.getHours();
+  // Use Intl to get current time in Pacific timezone (handles DST automatically)
+  const pacificTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   
-  // Thursday (4) and before 8pm
+  const day = pacificTime.getDay();
+  const hour = pacificTime.getHours();
+  
+  // Thursday (4) and before 8pm Pacific
   if (day === 4 && hour < 20) return true;
-  // Or any day before Thursday
-  if (day < 4 || day === 0) return true; // 0 is Sunday
+  // Or any day before Thursday (Sun=0 counts as before next Thu)
+  if (day >= 0 && day < 4) return true;
   return false;
 }
 
@@ -895,6 +896,7 @@ function SoccerLanding() {
   const activeSection = router.query.tab === 'history' ? 'history' : 'current';
 
   const setActiveSection = (section) => {
+    trackEvent('click', 'navigation', `tab_${section}`);
     router.push({
       pathname: '/',
       query: section === 'history' ? { tab: 'history' } : {}
@@ -955,6 +957,7 @@ function SoccerLanding() {
       
       if (res.ok && data.comment) {
         setLiveComments(prev => [data.comment, ...prev]);
+        trackEvent('submit', 'engagement', 'live_chat_message');
       }
       setNewComment({ name: newComment.name, content: '' });
     } catch (error) {
@@ -1166,9 +1169,11 @@ function SoccerLanding() {
         <header className="border-b border-emerald-900/40 bg-slate-950/70 backdrop-blur sticky top-0 z-20">
           <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shadow-lg">
-                <span className="text-xl">⚽</span>
-              </div>
+              <img 
+                src="/favicon.png" 
+                alt="Soccer Now SF" 
+                className="w-10 h-10 rounded-full shadow-lg"
+              />
               <div>
                 <span className="font-bold text-lg tracking-wide">Soccer Now SF</span>
                 <p className="text-xs text-emerald-300/70">Thursday pickup • Garfield Square</p>
@@ -1257,6 +1262,7 @@ function SoccerLanding() {
                       href={GAME_CONFIG.venmoLink}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => trackEvent('click', 'payment', 'venmo_main', 7)}
                       className="bg-[#008CFF] hover:bg-[#0070CC] text-white font-semibold py-3.5 px-4 rounded-xl text-center transition shadow-lg flex items-center justify-center gap-2"
                     >
                       <span className="text-lg">💳</span>
@@ -1264,6 +1270,7 @@ function SoccerLanding() {
                     </a>
                     <a
                       href={`sms:${GAME_CONFIG.zellePhone}`}
+                      onClick={() => trackEvent('click', 'payment', 'zelle_main', 7)}
                       className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white font-semibold py-3.5 px-4 rounded-xl text-center transition shadow-lg"
                     >
                       <div className="flex items-center justify-center gap-2">
@@ -1375,6 +1382,7 @@ function SoccerLanding() {
                                   href={`${GAME_CONFIG.venmoLink}&note=soccer-${player.name.split(' ')[0]}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={() => trackEvent('click', 'payment', `venmo_player_${player.name}`, 7)}
                                   className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded hover:bg-red-200 transition"
                                 >
                                   Pay $7
@@ -1422,6 +1430,7 @@ function SoccerLanding() {
                                   href={`${GAME_CONFIG.venmoLink}&note=soccer-${player.name.split(' ')[0]}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={() => trackEvent('click', 'payment', `venmo_player_${player.name}`, 7)}
                                   className="text-xs bg-red-900/50 text-red-400 px-2 py-0.5 rounded hover:bg-red-900/70 transition"
                                 >
                                   Pay $7
@@ -1467,6 +1476,7 @@ function SoccerLanding() {
                           href={GAME_CONFIG.venmoLink}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackEvent('click', 'payment', 'venmo_unpaid_callout', 7)}
                           className="inline-flex items-center gap-2 bg-[#008CFF] hover:bg-[#0070CC] text-white font-semibold py-2 px-4 rounded-lg text-sm transition"
                         >
                           💳 Pay via Venmo
@@ -1610,7 +1620,11 @@ function SoccerLanding() {
                     key={game.id}
                     game={game}
                     isExpanded={expandedGameId === game.id}
-                    onToggle={() => setExpandedGameId(expandedGameId === game.id ? null : game.id)}
+                    onToggle={() => {
+                      const willExpand = expandedGameId !== game.id;
+                      if (willExpand) trackEvent('click', 'engagement', `expand_game_${game.id}`);
+                      setExpandedGameId(willExpand ? game.id : null);
+                    }}
                   />
                 ))}
               </div>
