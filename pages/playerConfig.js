@@ -59,6 +59,7 @@ function PlayerConfig() {
   const [editingAnalysisRating, setEditingAnalysisRating] = useState(null);
   const [editingAnalysisPosition, setEditingAnalysisPosition] = useState(null);
   const [ratingFilter, setRatingFilter] = useState(7.5);
+  const [votedRatings, setVotedRatings] = useState({}); // Map of playerName -> avgRating from votes
 
   useEffect(() => {
     const isAuth = localStorage.getItem("isAuthenticated") === "true";
@@ -69,6 +70,7 @@ function PlayerConfig() {
     if (isAuthenticated) {
       fetchPlayersConfig();
       fetchCurrentGameData();
+      fetchVotedRatings();
     }
   }, [isAuthenticated]);
 
@@ -95,6 +97,27 @@ function PlayerConfig() {
       setCurrentGameData(data);
     } catch (error) {
       console.error('Error fetching current game data:', error);
+    }
+  };
+
+  const fetchVotedRatings = async () => {
+    try {
+      const response = await fetch('/api/votes?action=leaderboard', {
+        method: 'GET',
+        headers: noCacheHeaders,
+      });
+      const data = await response.json();
+      // Create a map of playerName -> voted rating data
+      const ratingsMap = {};
+      (data.allPlayers || []).forEach(player => {
+        ratingsMap[player.name] = {
+          avgRating: player.avgRating,
+          totalVotes: player.totalVotes
+        };
+      });
+      setVotedRatings(ratingsMap);
+    } catch (error) {
+      console.error('Error fetching voted ratings:', error);
     }
   };
 
@@ -906,7 +929,8 @@ function PlayerConfig() {
             <TableRow>
               <TableCell>⭐</TableCell>
               <TableCell>Name</TableCell>
-              <TableCell>Rating</TableCell>
+              <TableCell title="Your manual rating for team balancing">Admin Rating</TableCell>
+              <TableCell title="Average rating from player votes">Voted Rating</TableCell>
               <TableCell>Position</TableCell>
               <TableCell>Preferred Team</TableCell>
               <TableCell>Venmo Handle</TableCell>
@@ -961,7 +985,19 @@ function PlayerConfig() {
                       fullWidth
                     />
                   ) : (
-                    player.rating
+                    <span style={{ fontWeight: 'bold' }}>{player.rating || '-'}</span>
+                  )}
+                </TableCell>
+                <TableCell sx={{ color: '#666' }}>
+                  {votedRatings[player.name] ? (
+                    <span title={`${votedRatings[player.name].totalVotes} votes`}>
+                      {votedRatings[player.name].avgRating.toFixed(1)}
+                      <span style={{ fontSize: '0.7rem', marginLeft: '4px', color: '#999' }}>
+                        ({votedRatings[player.name].totalVotes})
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ color: '#ccc' }}>-</span>
                   )}
                 </TableCell>
                 <TableCell onClick={() => handleEditField(player, 'position')} sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' } }}>
