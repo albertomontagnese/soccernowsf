@@ -2,10 +2,8 @@ import { getVotesCollection } from "../../helpers/firestoreClient";
 import { serialize, parse } from 'cookie';
 import crypto from 'crypto';
 
-// Games to exclude from overall ratings calculation (e.g., test games)
-const EXCLUDED_GAME_IDS = [
-  '2026-01-22', // Test game with mocked data
-];
+// Games to exclude from overall ratings calculation (currently none)
+const EXCLUDED_GAME_IDS = [];
 
 // Cookie settings
 const RATING_COOKIE_NAME = 'soccer_ratings';

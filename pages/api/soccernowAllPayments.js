@@ -1,7 +1,143 @@
-import { getPaymentsCollection } from "../../helpers/firestoreClient";
+import { getPaymentsCollection, getGamesCollection, getPlayersCollection } from "../../helpers/firestoreClient";
 
 // Check if running in production (Vercel) or development
 const isProduction = process.env.VERCEL || process.env.NODE_ENV === 'production';
+
+/**
+ * Auto-archive previous week's game if not already archived
+ * This runs lazily on the first request of a new cycle
+ */
+async function autoArchivePreviousGame(todayInPT, allPayments) {
+  const currentDayOfWeek = todayInPT.getDay();
+  
+  // Only attempt auto-archive on Fri/Sat/Sun (start of new cycle)
+  // This gives a window to catch the archive on first visits after game day
+  if (currentDayOfWeek !== 5 && currentDayOfWeek !== 6 && currentDayOfWeek !== 0) {
+    return null; // Not in archive window
+  }
+  
+  try {
+    // Calculate previous Thursday's date
+    let daysSincePrevThursday;
+    if (currentDayOfWeek === 5) daysSincePrevThursday = 1; // Friday -> 1 day ago
+    else if (currentDayOfWeek === 6) daysSincePrevThursday = 2; // Saturday -> 2 days ago
+    else daysSincePrevThursday = 3; // Sunday -> 3 days ago
+    
+    const prevThursday = new Date(todayInPT);
+    prevThursday.setDate(todayInPT.getDate() - daysSincePrevThursday);
+    const prevThursdayId = prevThursday.toISOString().split('T')[0];
+    
+    // Check if game already archived
+    const gamesRef = getGamesCollection();
+    const existingGame = await gamesRef.doc(prevThursdayId).get();
+    
+    if (existingGame.exists) {
+      console.log(`✅ Game ${prevThursdayId} already archived`);
+      return null; // Already archived
+    }
+    
+    console.log(`📦 Auto-archiving game for ${prevThursdayId}...`);
+    
+    // Calculate the previous cycle (Friday before prev Thursday to prev Thursday)
+    const prevCycleStart = new Date(prevThursday);
+    prevCycleStart.setDate(prevThursday.getDate() - 6);
+    prevCycleStart.setHours(0, 1, 0, 0);
+    
+    const prevCycleEnd = new Date(prevThursday);
+    prevCycleEnd.setHours(23, 59, 59, 999);
+    
+    const startTimestamp = prevCycleStart.getTime();
+    const endTimestamp = prevCycleEnd.getTime();
+    
+    // Filter payments for previous cycle
+    const prevCyclePayments = allPayments.filter((item) => {
+      const itemTimestamp = parseInt(item.date, 10);
+      return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
+    });
+    
+    if (prevCyclePayments.length < 4) {
+      console.log(`⚠️ Only ${prevCyclePayments.length} players found for ${prevThursdayId}, skipping auto-archive`);
+      return null; // Not enough players to archive
+    }
+    
+    // Group by name and get most recent/paid entry
+    const groupedByName = prevCyclePayments.reduce((acc, item) => {
+      acc[item.name] = acc[item.name] || [];
+      acc[item.name].push(item);
+      return acc;
+    }, {});
+    
+    const uniquePayments = Object.values(groupedByName).map((group) => {
+      return group.find((item) => item.paid) || group[0];
+    });
+    
+    // Get player ratings
+    const playersRef = getPlayersCollection();
+    const playersSnapshot = await playersRef.get();
+    const allPlayers = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Build rosters with ratings
+    const whiteRoster = uniquePayments.filter(p => p.team === 'white').map(payment => {
+      const paymentName = (payment.name || '').trim().toLowerCase();
+      const playerData = allPlayers.find(player => 
+        (player.name || '').trim().toLowerCase() === paymentName
+      );
+      return {
+        name: payment.name,
+        rating: playerData?.rating || 7.0,
+        position: playerData?.position || 'midfielder',
+        goalkeeper: payment.goalkeeper || false
+      };
+    });
+    
+    const darkRoster = uniquePayments.filter(p => p.team === 'dark').map(payment => {
+      const paymentName = (payment.name || '').trim().toLowerCase();
+      const playerData = allPlayers.find(player => 
+        (player.name || '').trim().toLowerCase() === paymentName
+      );
+      return {
+        name: payment.name,
+        rating: playerData?.rating || 7.0,
+        position: playerData?.position || 'midfielder',
+        goalkeeper: payment.goalkeeper || false
+      };
+    });
+    
+    // Calculate ratings and odds
+    const whiteRating = whiteRoster.reduce((sum, p) => sum + (p.rating || 7.0), 0);
+    const darkRating = darkRoster.reduce((sum, p) => sum + (p.rating || 7.0), 0);
+    const total = whiteRating + darkRating;
+    const whiteOdds = total > 0 ? parseFloat(((whiteRating / total) * 100).toFixed(1)) : 50;
+    const darkOdds = parseFloat((100 - whiteOdds).toFixed(1));
+    
+    const gameData = {
+      gameDate: prevThursdayId,
+      archivedAt: new Date().toISOString(),
+      autoArchived: true, // Mark as auto-archived
+      whiteTeam: {
+        roster: whiteRoster,
+        totalRating: whiteRating,
+        avgRating: whiteRoster.length > 0 ? (whiteRating / whiteRoster.length).toFixed(1) : 0,
+        winProbability: whiteOdds
+      },
+      darkTeam: {
+        roster: darkRoster,
+        totalRating: darkRating,
+        avgRating: darkRoster.length > 0 ? (darkRating / darkRoster.length).toFixed(1) : 0,
+        winProbability: darkOdds
+      },
+      totalPlayers: uniquePayments.length
+    };
+    
+    await gamesRef.doc(prevThursdayId).set(gameData);
+    console.log(`✅ Auto-archived game ${prevThursdayId} with ${uniquePayments.length} players`);
+    
+    return { id: prevThursdayId, ...gameData };
+  } catch (error) {
+    console.error('❌ Auto-archive failed:', error.message);
+    return null; // Don't break the main request if archive fails
+  }
+}
 
 export default async function user(req, res) {
   try {
@@ -73,6 +209,10 @@ export default async function user(req, res) {
           console.log(`${i+1}. ${item.name} - ${new Date(parseInt(item.date)).toLocaleString()} - $${item.money}`);
         });
       }
+      
+      // Auto-archive previous game if needed (lazy archive on first request of new cycle)
+      await autoArchivePreviousGame(todayInPT, dynamoData.Items);
+      
     } catch (dbError) {
       console.error('❌ Firestore connection failed:', dbError.message);
       console.log('📝 Using mock data - check environment for correct Google credentials');

@@ -1,4 +1,4 @@
-import { getGamesCollection, getPlayersCollection, getPaymentsCollection } from "../../helpers/firestoreClient";
+import { getGamesCollection, getPlayersCollection, getPaymentsCollection, getVotesCollection, getCommentsCollection, getFirestore } from "../../helpers/firestoreClient";
 
 /**
  * Calculate team rating from roster
@@ -21,16 +21,30 @@ function calculateWinProbability(teamARating, teamBRating) {
 }
 
 /**
- * Get the game date for a given Thursday
+ * Get the game date for a given Thursday (uses Pacific Time for consistency)
  * Returns the date string in format YYYY-MM-DD
  */
 function getGameDateId(date = new Date()) {
-  // Get the Thursday of the current week
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 4); // Adjust to Thursday
-  const thursday = new Date(d.setDate(diff));
-  return thursday.toISOString().split('T')[0];
+  // Convert to Pacific Time for consistency
+  const pacificTime = new Date(date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const day = pacificTime.getDay(); // 0=Sun, 4=Thu, 5=Fri
+  
+  // Fri/Sat/Sun -> next Thursday, Mon-Thu -> this Thursday
+  let daysToThursday;
+  if (day >= 5 || day === 0) {
+    daysToThursday = day === 5 ? 6 : day === 6 ? 5 : 4;
+  } else {
+    daysToThursday = 4 - day;
+  }
+  
+  const thursday = new Date(pacificTime);
+  thursday.setDate(pacificTime.getDate() + daysToThursday);
+  
+  // Format as YYYY-MM-DD
+  const year = thursday.getFullYear();
+  const month = String(thursday.getMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(thursday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayOfMonth}`;
 }
 
 export default async function handler(req, res) {
@@ -170,6 +184,132 @@ export default async function handler(req, res) {
       // Save a game to history (typically called after game ends, or manually)
       const { action } = req.query;
       
+      if (action === 'archive-past-week') {
+        // Archive a past week's game by specifying a target Thursday date
+        const { targetDate } = req.body; // e.g., "2026-01-29"
+        
+        if (!targetDate) {
+          return res.status(400).json({ message: 'targetDate is required (YYYY-MM-DD format)' });
+        }
+        
+        const playersRef = getPlayersCollection();
+        const paymentsRef = getPaymentsCollection();
+        const gamesRef = getGamesCollection();
+        
+        // Check if game already exists
+        const existingGame = await gamesRef.doc(targetDate).get();
+        if (existingGame.exists) {
+          return res.status(400).json({ message: 'Game already archived for this date', game: existingGame.data() });
+        }
+        
+        // Calculate the cycle for the target date (Friday before to Thursday)
+        const targetThursday = new Date(targetDate + 'T12:00:00');
+        
+        // Cycle starts Friday 00:01 (6 days before Thursday)
+        const cycleStartFriday = new Date(targetThursday);
+        cycleStartFriday.setDate(targetThursday.getDate() - 6);
+        cycleStartFriday.setHours(0, 1, 0, 0);
+        
+        // Cycle ends Thursday 23:59
+        const cycleEndThursday = new Date(targetThursday);
+        cycleEndThursday.setHours(23, 59, 59, 999);
+        
+        const startTimestamp = cycleStartFriday.getTime();
+        const endTimestamp = cycleEndThursday.getTime();
+        
+        console.log(`Archiving game for ${targetDate}, cycle: ${cycleStartFriday} to ${cycleEndThursday}`);
+        
+        const [playersSnapshot, paymentsSnapshot] = await Promise.all([
+          playersRef.get(),
+          paymentsRef.where('money', '==', 7).get()
+        ]);
+        
+        const allPlayers = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const allPayments = paymentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Filter payments to the target week cycle
+        const payments = allPayments.filter((item) => {
+          const itemTimestamp = parseInt(item.date, 10);
+          return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
+        });
+        
+        if (payments.length === 0) {
+          return res.status(400).json({ 
+            message: 'No players found for this week', 
+            debug: { startTimestamp, endTimestamp, totalPayments: allPayments.length }
+          });
+        }
+        
+        // Group by name and get most recent/paid entry
+        const groupedByName = payments.reduce((acc, item) => {
+          acc[item.name] = acc[item.name] || [];
+          acc[item.name].push(item);
+          return acc;
+        }, {});
+        
+        const uniquePayments = Object.values(groupedByName).map((group) => {
+          return group.find((item) => item.paid) || group[0];
+        });
+        
+        // Build rosters with ratings (using case-insensitive matching)
+        const whiteRoster = uniquePayments.filter(p => p.team === 'white').map(payment => {
+          const paymentName = (payment.name || '').trim().toLowerCase();
+          const playerData = allPlayers.find(player => 
+            (player.name || '').trim().toLowerCase() === paymentName
+          );
+          return {
+            name: payment.name,
+            rating: playerData?.rating || 7.0,
+            position: playerData?.position || 'midfielder',
+            goalkeeper: payment.goalkeeper || false
+          };
+        });
+        
+        const darkRoster = uniquePayments.filter(p => p.team === 'dark').map(payment => {
+          const paymentName = (payment.name || '').trim().toLowerCase();
+          const playerData = allPlayers.find(player => 
+            (player.name || '').trim().toLowerCase() === paymentName
+          );
+          return {
+            name: payment.name,
+            rating: playerData?.rating || 7.0,
+            position: playerData?.position || 'midfielder',
+            goalkeeper: payment.goalkeeper || false
+          };
+        });
+        
+        const whiteRating = calculateTeamRating(whiteRoster);
+        const darkRating = calculateTeamRating(darkRoster);
+        const whiteOdds = calculateWinProbability(whiteRating, darkRating);
+        const darkOdds = parseFloat((100 - whiteOdds).toFixed(1));
+        
+        const gameData = {
+          gameDate: targetDate,
+          archivedAt: new Date().toISOString(),
+          whiteTeam: {
+            roster: whiteRoster,
+            totalRating: whiteRating,
+            avgRating: whiteRoster.length > 0 ? (whiteRating / whiteRoster.length).toFixed(1) : 0,
+            winProbability: whiteOdds
+          },
+          darkTeam: {
+            roster: darkRoster,
+            totalRating: darkRating,
+            avgRating: darkRoster.length > 0 ? (darkRating / darkRoster.length).toFixed(1) : 0,
+            winProbability: darkOdds
+          },
+          totalPlayers: uniquePayments.length
+        };
+        
+        // Save game with date as ID
+        await gamesRef.doc(targetDate).set(gameData);
+        
+        return res.status(200).json({ 
+          message: 'Past game archived successfully', 
+          game: { id: targetDate, ...gameData } 
+        });
+      }
+      
       if (action === 'archive-current') {
         // Archive the current game
         const playersRef = getPlayersCollection();
@@ -280,6 +420,53 @@ export default async function handler(req, res) {
     }
     
     else if (req.method === 'PATCH') {
+      const { action } = req.query;
+      
+      // Migration: move votes from one game ID to another
+      if (action === 'migrate-votes') {
+        const { fromGameId, toGameId } = req.body;
+        
+        if (!fromGameId || !toGameId) {
+          return res.status(400).json({ message: 'fromGameId and toGameId are required' });
+        }
+        
+        const votesRef = getVotesCollection();
+        
+        // Get all votes for the source game
+        const snapshot = await votesRef.where('gameId', '==', fromGameId).get();
+        
+        if (snapshot.empty) {
+          return res.status(400).json({ message: `No votes found for game ${fromGameId}` });
+        }
+        
+        const batch = getFirestore().batch();
+        let migratedCount = 0;
+        
+        snapshot.docs.forEach(doc => {
+          const vote = doc.data();
+          // Create new vote with updated gameId
+          const newVoteId = doc.id.replace(fromGameId, toGameId);
+          const newVoteRef = votesRef.doc(newVoteId);
+          
+          batch.set(newVoteRef, {
+            ...vote,
+            gameId: toGameId,
+            migratedFrom: fromGameId,
+            migratedAt: new Date().toISOString()
+          });
+          
+          // Delete old vote
+          batch.delete(doc.ref);
+          migratedCount++;
+        });
+        
+        await batch.commit();
+        
+        return res.status(200).json({ 
+          message: `Migrated ${migratedCount} votes from ${fromGameId} to ${toGameId}` 
+        });
+      }
+      
       // Update game score
       const { gameId, whiteScore, darkScore } = req.body;
       
@@ -306,8 +493,51 @@ export default async function handler(req, res) {
       });
     }
     
+    else if (req.method === 'DELETE') {
+      // Delete a game and its associated votes/comments
+      const { gameId } = req.body;
+      
+      if (!gameId) {
+        return res.status(400).json({ message: 'gameId is required' });
+      }
+      
+      const gamesRef = getGamesCollection();
+      const gameDoc = await gamesRef.doc(gameId).get();
+      
+      if (!gameDoc.exists) {
+        return res.status(404).json({ message: 'Game not found' });
+      }
+      
+      // Delete the game
+      await gamesRef.doc(gameId).delete();
+      
+      // Also delete associated votes
+      const votesRef = getVotesCollection();
+      const votesSnapshot = await votesRef.where('gameId', '==', gameId).get();
+      const voteBatch = getFirestore().batch();
+      votesSnapshot.docs.forEach(doc => voteBatch.delete(doc.ref));
+      if (!votesSnapshot.empty) {
+        await voteBatch.commit();
+      }
+      
+      // Also delete associated comments
+      const commentsRef = getCommentsCollection();
+      const commentsSnapshot = await commentsRef.where('gameId', '==', gameId).get();
+      const commentBatch = getFirestore().batch();
+      commentsSnapshot.docs.forEach(doc => commentBatch.delete(doc.ref));
+      if (!commentsSnapshot.empty) {
+        await commentBatch.commit();
+      }
+      
+      return res.status(200).json({ 
+        message: `Game ${gameId} deleted successfully`,
+        deletedVotes: votesSnapshot.size,
+        deletedComments: commentsSnapshot.size
+      });
+    }
+    
     else {
-      res.setHeader('Allow', ['GET', 'POST', 'PATCH']);
+      res.setHeader('Allow', ['GET', 'POST', 'PATCH', 'DELETE']);
       return res.status(405).json({ message: `Method ${req.method} not allowed` });
     }
   } catch (error) {

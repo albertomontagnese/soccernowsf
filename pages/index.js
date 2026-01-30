@@ -4,8 +4,7 @@ import { useRouter } from "next/router";
 import { noCacheHeaders } from "../helpers/misc";
 import { trackEvent } from "./_app";
 
-// Test games to mark in the UI (excluded from overall ratings)
-const TEST_GAME_IDS = ['2026-01-22'];
+// No test games currently
 
 // Game configuration
 const GAME_CONFIG = {
@@ -39,14 +38,31 @@ function getUpcomingThursday() {
   });
 }
 
-// Get current Thursday's date ID
+// Get current Thursday's date ID (uses Pacific Time for consistency with backend)
 function getCurrentThursdayId() {
+  // Convert to Pacific Time to match backend logic
   const now = new Date();
-  const day = now.getDay();
-  const diff = day <= 4 ? 4 - day : 4 - day + 7;
-  const thursday = new Date(now);
-  thursday.setDate(now.getDate() + diff);
-  return thursday.toISOString().split('T')[0];
+  const pacificTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const day = pacificTime.getDay(); // 0=Sun, 4=Thu, 5=Fri
+  
+  // Same logic as backend: Fri/Sat/Sun -> next Thursday, Mon-Thu -> this Thursday
+  let daysToThursday;
+  if (day >= 5 || day === 0) {
+    // Fri/Sat/Sun - target next Thursday
+    daysToThursday = day === 5 ? 6 : day === 6 ? 5 : 4;
+  } else {
+    // Mon-Thu - target this Thursday
+    daysToThursday = 4 - day;
+  }
+  
+  const thursday = new Date(pacificTime);
+  thursday.setDate(pacificTime.getDate() + daysToThursday);
+  
+  // Format as YYYY-MM-DD
+  const year = thursday.getFullYear();
+  const month = String(thursday.getMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(thursday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayOfMonth}`;
 }
 
 // Check if current game is still in progress (before 8pm Pacific Thursday)
@@ -251,7 +267,6 @@ function GameCard({ game, isExpanded, onToggle }) {
   const [scoreInput, setScoreInput] = useState({ white: '', dark: '' });
 
   const isCurrent = game.isCurrent === true;
-  const isTestGame = TEST_GAME_IDS.includes(game.id) || TEST_GAME_IDS.includes(game.gameDate);
   const gameInProgress = isCurrent && isGameInProgress();
   const canRate = !gameInProgress; // Can only rate after game is over (8pm Thursday)
 
@@ -429,27 +444,27 @@ function GameCard({ game, isExpanded, onToggle }) {
   };
 
   return (
-    <div className={`bg-slate-900/70 rounded-2xl border overflow-hidden mb-4 backdrop-blur ${
-      isCurrent ? 'border-emerald-400/40 shadow-[0_10px_30px_rgba(16,185,129,0.15)]' : 'border-slate-800/80'
-    }`}>
+    <div 
+      id={`game-${game.id}`}
+      className={`bg-slate-900/70 rounded-2xl border overflow-hidden mb-4 backdrop-blur ${
+        isCurrent ? 'border-emerald-400/40 shadow-[0_10px_30px_rgba(16,185,129,0.15)]' : 'border-slate-800/80'
+      }`}
+    >
       {/* Header */}
       <button 
         onClick={onToggle}
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-900/80 transition"
       >
         <div className="flex items-center gap-3">
-          <span className="text-xl">{isCurrent ? '🔴' : isTestGame ? '🧪' : '📅'}</span>
+          <span className="text-xl">{isCurrent ? '🔴' : '📅'}</span>
           <div className="text-left">
             <div className="flex items-center gap-2">
               <span className="text-white font-medium">{formatDate(game.gameDate)}</span>
               {isCurrent && (
                 <span className="text-xs bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">LIVE</span>
               )}
-              {isTestGame && (
-                <span className="text-xs bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">TEST</span>
-              )}
             </div>
-            <span className="text-zinc-400 text-sm">{game.totalPlayers} players{isTestGame && ' • Not counted in overall ratings'}</span>
+            <span className="text-zinc-400 text-sm">{game.totalPlayers} players</span>
           </div>
         </div>
         
@@ -462,20 +477,29 @@ function GameCard({ game, isExpanded, onToggle }) {
           <span className="text-zinc-500">{isExpanded ? '▲' : '▼'}</span>
         </div>
       </button>
+      
+      {/* Share button - only show when expanded */}
+      {isExpanded && (
+        <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-800/80 flex justify-end">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const url = `${window.location.origin}/?tab=history&game=${game.id}`;
+              navigator.clipboard.writeText(url);
+              alert('Link copied to clipboard!');
+            }}
+            className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+          >
+            🔗 Copy Link
+          </button>
+        </div>
+      )}
 
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-slate-800/80">
-          {/* Test game notice */}
-          {isTestGame && (
-            <div className="border-b px-4 py-3 text-center bg-amber-900/20 border-amber-700/40">
-              <p className="text-sm text-amber-400">
-                🧪 Test game — Ratings from this game are not included in overall player rankings
-              </p>
-            </div>
-          )}
           {/* Current game notice */}
-          {isCurrent && !isTestGame && (
+          {isCurrent && (
             <div className={`border-b px-4 py-3 text-center ${gameInProgress ? 'bg-amber-900/20 border-amber-700/40' : 'bg-emerald-900/20 border-emerald-700/40'}`}>
               <p className={`text-sm ${gameInProgress ? 'text-amber-400' : 'text-emerald-400'}`}>
                 {gameInProgress 
@@ -809,6 +833,165 @@ function GameCard({ game, isExpanded, onToggle }) {
   );
 }
 
+// Trends Component - Team wins and player performance
+function TrendsSection({ trends }) {
+  if (!trends) return null;
+  
+  const { teamWins, gameResults, playerTrends } = trends;
+  const totalGames = teamWins.white + teamWins.dark + teamWins.ties;
+  
+  if (totalGames === 0 && playerTrends.length === 0) return null;
+  
+  // Calculate percentages for pie chart
+  const whitePercent = totalGames > 0 ? (teamWins.white / totalGames) * 100 : 0;
+  const darkPercent = totalGames > 0 ? (teamWins.dark / totalGames) * 100 : 0;
+  const tiePercent = totalGames > 0 ? (teamWins.ties / totalGames) * 100 : 0;
+  
+  // Generate pie chart segments
+  const generatePieSegment = (startPercent, percent, color) => {
+    if (percent === 0) return null;
+    const startAngle = (startPercent / 100) * 360 - 90;
+    const endAngle = ((startPercent + percent) / 100) * 360 - 90;
+    const largeArc = percent > 50 ? 1 : 0;
+    
+    const startX = 50 + 40 * Math.cos((startAngle * Math.PI) / 180);
+    const startY = 50 + 40 * Math.sin((startAngle * Math.PI) / 180);
+    const endX = 50 + 40 * Math.cos((endAngle * Math.PI) / 180);
+    const endY = 50 + 40 * Math.sin((endAngle * Math.PI) / 180);
+    
+    return `M 50 50 L ${startX} ${startY} A 40 40 0 ${largeArc} 1 ${endX} ${endY} Z`;
+  };
+
+  return (
+    <div className="mb-8 space-y-6">
+      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        📈 Trends & Statistics
+      </h3>
+      
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Team Win History - Pie Chart */}
+        {totalGames > 0 && (
+          <div className="bg-slate-900/70 rounded-2xl p-5 border border-slate-800/80 backdrop-blur">
+            <h4 className="text-white font-medium mb-4 text-center">Team Win History</h4>
+            <div className="flex items-center justify-center gap-6">
+              {/* Pie Chart */}
+              <svg viewBox="0 0 100 100" className="w-32 h-32">
+                {/* White segment */}
+                <path d={generatePieSegment(0, whitePercent, '#f5f5f5')} fill="#f5f5f5" />
+                {/* Dark segment */}
+                <path d={generatePieSegment(whitePercent, darkPercent, '#27272a')} fill="#27272a" stroke="#52525b" strokeWidth="0.5" />
+                {/* Tie segment */}
+                {tiePercent > 0 && (
+                  <path d={generatePieSegment(whitePercent + darkPercent, tiePercent, '#71717a')} fill="#71717a" />
+                )}
+                {/* Center circle for donut effect */}
+                <circle cx="50" cy="50" r="20" fill="#0f172a" />
+                <text x="50" y="54" textAnchor="middle" fill="#10b981" fontSize="12" fontWeight="bold">
+                  {totalGames}
+                </text>
+              </svg>
+              
+              {/* Legend */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-white border border-zinc-300"></div>
+                  <span className="text-white text-sm">White: {teamWins.white} ({whitePercent.toFixed(0)}%)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-zinc-800 border border-zinc-600"></div>
+                  <span className="text-white text-sm">Dark: {teamWins.dark} ({darkPercent.toFixed(0)}%)</span>
+                </div>
+                {teamWins.ties > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-zinc-500"></div>
+                    <span className="text-white text-sm">Ties: {teamWins.ties} ({tiePercent.toFixed(0)}%)</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Recent Results */}
+            {gameResults.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-800">
+                <p className="text-zinc-400 text-xs mb-2">Recent Results:</p>
+                <div className="flex flex-wrap gap-2">
+                  {gameResults.slice(-5).reverse().map((result, idx) => (
+                    <span 
+                      key={idx}
+                      className={`text-xs px-2 py-1 rounded ${
+                        result.winner === 'white' ? 'bg-white/20 text-white' :
+                        result.winner === 'dark' ? 'bg-zinc-700 text-zinc-200' :
+                        'bg-zinc-600 text-zinc-300'
+                      }`}
+                    >
+                      {result.score} {result.winner === 'white' ? '⬜' : result.winner === 'dark' ? '⬛' : '🤝'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Player Performance Trends - Bar Chart */}
+        {playerTrends.length > 0 && (
+          <div className="bg-slate-900/70 rounded-2xl p-5 border border-slate-800/80 backdrop-blur">
+            <h4 className="text-white font-medium mb-4 text-center">Top Players by Games</h4>
+            <div className="space-y-3">
+              {playerTrends.slice(0, 6).map((player, idx) => {
+                const maxRating = 10;
+                const barWidth = (player.avgRating / maxRating) * 100;
+                const ratingColor = player.avgRating >= 8 ? 'bg-emerald-500' : 
+                                    player.avgRating >= 6 ? 'bg-yellow-500' : 'bg-red-500';
+                
+                return (
+                  <div key={player.name} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-300 truncate max-w-[150px]" title={player.name}>
+                        {idx + 1}. {player.name.split(' ')[0]}
+                      </span>
+                      <span className="text-zinc-400">
+                        {player.avgRating.toFixed(1)} avg • {player.gamesPlayed} game{player.gamesPlayed !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${ratingColor} transition-all duration-500`}
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    {/* Sparkline of rating trend */}
+                    {player.trend.length > 1 && (
+                      <div className="flex items-center gap-1 h-4">
+                        {player.trend.map((game, i) => {
+                          const height = (game.avgRating / 10) * 16;
+                          const color = game.avgRating >= 8 ? '#10b981' : game.avgRating >= 6 ? '#eab308' : '#ef4444';
+                          return (
+                            <div 
+                              key={i}
+                              className="flex-1 flex items-end"
+                              title={`${game.gameId}: ${game.avgRating.toFixed(1)}`}
+                            >
+                              <div 
+                                className="w-full rounded-t"
+                                style={{ height: `${height}px`, backgroundColor: color, opacity: 0.7 }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Overall Player Leaderboard Component (across all games)
 function Leaderboard({ bestPlayers, worstPlayers }) {
   if (bestPlayers.length === 0 && worstPlayers.length === 0) return null;
@@ -884,6 +1067,7 @@ function SoccerLanding() {
   const [currentGameData, setCurrentGameData] = useState(null);
   const [expandedGameId, setExpandedGameId] = useState(null);
   const [leaderboard, setLeaderboard] = useState({ bestPlayers: [], worstPlayers: [] });
+  const [trends, setTrends] = useState(null);
   const [currentOdds, setCurrentOdds] = useState(null);
   
   // Live chat state for current game
@@ -892,22 +1076,61 @@ function SoccerLanding() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [savedCommenterName, setSavedCommenterName] = useState('');
 
-  // Get active section from URL query param
+  // Get active section and game from URL query params
   const activeSection = router.query.tab === 'history' ? 'history' : 'current';
+  const gameFromUrl = router.query.game || null;
 
-  const setActiveSection = (section) => {
+  const setActiveSection = (section, gameId = null) => {
     trackEvent('click', 'navigation', `tab_${section}`);
-    router.push({
-      pathname: '/',
-      query: section === 'history' ? { tab: 'history' } : {}
-    }, undefined, { shallow: true });
+    const query = {};
+    if (section === 'history') {
+      query.tab = 'history';
+      if (gameId) query.game = gameId;
+    }
+    router.push({ pathname: '/', query }, undefined, { shallow: true });
   };
+  
+  // Handle expanding/collapsing games with URL update
+  const handleGameToggle = (gameId) => {
+    const willExpand = expandedGameId !== gameId;
+    if (willExpand) {
+      trackEvent('click', 'engagement', `expand_game_${gameId}`);
+      setExpandedGameId(gameId);
+      // Update URL with game ID
+      router.push({
+        pathname: '/',
+        query: { tab: 'history', game: gameId }
+      }, undefined, { shallow: true });
+    } else {
+      setExpandedGameId(null);
+      // Remove game from URL
+      router.push({
+        pathname: '/',
+        query: { tab: 'history' }
+      }, undefined, { shallow: true });
+    }
+  };
+  
+  // Auto-expand game from URL on initial load
+  useEffect(() => {
+    if (gameFromUrl && activeSection === 'history') {
+      setExpandedGameId(gameFromUrl);
+      // Scroll to game after a short delay to allow render
+      setTimeout(() => {
+        const gameElement = document.getElementById(`game-${gameFromUrl}`);
+        if (gameElement) {
+          gameElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+    }
+  }, [gameFromUrl, activeSection]);
 
   useEffect(() => {
     fetchPaymentsData();
     fetchCurrentOdds();
     fetchGameHistory();
     fetchLeaderboard();
+    fetchTrends();
     
     // Load saved commenter name
     const name = localStorage.getItem('soccer_commenter_name') || '';
@@ -1062,6 +1285,16 @@ function SoccerLanding() {
       });
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
+    }
+  };
+
+  const fetchTrends = async () => {
+    try {
+      const response = await fetch('/api/trends');
+      const data = await response.json();
+      setTrends(data);
+    } catch (error) {
+      console.error("Error fetching trends:", error);
     }
   };
 
@@ -1604,6 +1837,9 @@ function SoccerLanding() {
             {/* Leaderboard */}
             <Leaderboard bestPlayers={leaderboard.bestPlayers} worstPlayers={leaderboard.worstPlayers} />
 
+            {/* Trends & Statistics */}
+            <TrendsSection trends={trends} />
+
             {/* Games List */}
             {allGames.length === 0 ? (
               <div className="bg-slate-900/70 rounded-2xl p-8 border border-emerald-900/30 text-center">
@@ -1620,11 +1856,7 @@ function SoccerLanding() {
                     key={game.id}
                     game={game}
                     isExpanded={expandedGameId === game.id}
-                    onToggle={() => {
-                      const willExpand = expandedGameId !== game.id;
-                      if (willExpand) trackEvent('click', 'engagement', `expand_game_${game.id}`);
-                      setExpandedGameId(willExpand ? game.id : null);
-                    }}
+                    onToggle={() => handleGameToggle(game.id)}
                   />
                 ))}
               </div>
