@@ -51,7 +51,7 @@ function EditSoccerNow({ isEditMode = true }) {
     money: 0,
     date: "",
     paid: false,
-    team: "white",
+    team: "dark", // Default to dark team
     goalkeeper: false,
   });
   const [payments, setPayments] = useState([]);
@@ -127,7 +127,7 @@ function EditSoccerNow({ isEditMode = true }) {
       money: 0,
       date: "",
       paid: false,
-      team: "white",
+      team: "dark",
       goalkeeper: false,
     });
     setEditingId(null);
@@ -161,7 +161,7 @@ function EditSoccerNow({ isEditMode = true }) {
         money: 0,
         date: "",
         paid: false,
-        team: "white",
+        team: "dark",
         goalkeeper: false,
       });
       setEditingId(null);
@@ -279,7 +279,7 @@ function EditSoccerNow({ isEditMode = true }) {
         date: Date.now(),
         paid: record.paid,
         team: record.team,
-        goalkeeper: record.goalkeeper === "true" ? true : false,
+        goalkeeper: Boolean(record.goalkeeper),
       };
 
       const response = await fetch("/api/soccernowUpdatePayment", {
@@ -299,7 +299,7 @@ function EditSoccerNow({ isEditMode = true }) {
           money: 0,
           date: "",
           paid: false,
-          team: "white",
+          team: "dark",
           goalkeeper: false,
         });
       } else {
@@ -407,6 +407,85 @@ function EditSoccerNow({ isEditMode = true }) {
           </Button>
         </div>
       )}
+      
+      {/* Venmo Request Links for Unpaid Players */}
+      {isEditMode && payments.filter(p => !p.paid).length > 0 && (
+        <Paper className="p-4 mb-4" style={{ backgroundColor: '#fff3e0' }}>
+          <h3 className="text-lg font-bold mb-2">💸 Venmo Request Links (Unpaid Players)</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Click to open Venmo request for each player, or copy all links below.
+          </p>
+          <div className="space-y-2">
+            {payments.filter(p => !p.paid).map(player => {
+              const playerConfig = dynamicPlayers.find(dp => 
+                dp.name?.toLowerCase().trim() === player.name?.toLowerCase().trim()
+              );
+              const venmoHandle = playerConfig?.venmoHandle?.replace('@', '') || '';
+              const requestUrl = venmoHandle 
+                ? `https://venmo.com/${venmoHandle}?txn=charge&amount=7&note=Soccer%20Thu%20${encodeURIComponent(player.name)}`
+                : null;
+              
+              return (
+                <div key={player.id} className="flex items-center gap-2">
+                  <span className="w-40 truncate">{player.name}</span>
+                  {venmoHandle ? (
+                    <>
+                      <a 
+                        href={requestUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline text-sm"
+                      >
+                        @{venmoHandle}
+                      </a>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => window.open(requestUrl, '_blank')}
+                        style={{ fontSize: '0.7rem' }}
+                      >
+                        Request $7
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-gray-400 text-sm italic">
+                      No Venmo handle set - <a href="/playerConfig" className="text-blue-500 hover:underline">add in config</a>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Copy all Venmo handles for bulk message */}
+          {payments.filter(p => !p.paid).some(player => {
+            const pc = dynamicPlayers.find(dp => dp.name?.toLowerCase().trim() === player.name?.toLowerCase().trim());
+            return pc?.venmoHandle;
+          }) && (
+            <div className="mt-4 pt-4 border-t border-orange-200">
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const handles = payments
+                    .filter(p => !p.paid)
+                    .map(player => {
+                      const pc = dynamicPlayers.find(dp => dp.name?.toLowerCase().trim() === player.name?.toLowerCase().trim());
+                      return pc?.venmoHandle?.replace('@', '');
+                    })
+                    .filter(Boolean);
+                  const text = handles.map(h => `@${h}`).join(', ');
+                  navigator.clipboard.writeText(text);
+                  alert(`Copied ${handles.length} Venmo handles: ${text}`);
+                }}
+                style={{ backgroundColor: '#008CFF' }}
+              >
+                📋 Copy All Venmo Handles
+              </Button>
+            </div>
+          )}
+        </Paper>
+      )}
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
@@ -502,7 +581,7 @@ function EditSoccerNow({ isEditMode = true }) {
                 setRecord((prevRecord) => ({
                   ...prevRecord,
                   name: "",
-                  team: "white", // default team
+                  team: "dark", // default team
                   goalkeeper: false, // default goalkeeper status
                 }));
                 setIsAutoPrefilled(false);
@@ -524,7 +603,7 @@ function EditSoccerNow({ isEditMode = true }) {
                 setRecord((prevRecord) => ({
                   ...prevRecord,
                   name: playerName,
-                  team: matchingPlayer.team || "white", // Use player's preferred team or default to white
+                  team: matchingPlayer.team || "dark", // Use player's preferred team or default to dark
                   goalkeeper: isGoalkeeper, // Use goalkeeper status or check position
                 }));
                 setIsAutoPrefilled(true);

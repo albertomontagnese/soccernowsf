@@ -65,9 +65,10 @@ export default async function handler(req, res) {
             batch.set(docRef, {
               name: player.name,
               venmoFullName: player.venmoFullName || '',
+              venmoHandle: player.venmoHandle || '', // @username for Venmo requests
               phoneNumber: player.phoneNumber || '',
               whatsAppName: player.whatsAppName || '',
-              team: player.team || 'white',
+              team: player.team || 'dark', // Default to dark team
               goalkeeper: player.goalkeeper || false,
               paid: player.paid || false,
               rating: player.rating || 7.0,

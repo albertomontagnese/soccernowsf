@@ -70,7 +70,8 @@
       "paid": false,
       "rating": 6.5,
       "position": "striker",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "Lucas-Ramadan"
     },
     {
       "name": "Nick Susac",
@@ -190,7 +191,8 @@
       "paid": false,
       "rating": 6.5,
       "position": "striker",
-      "favorite": true
+      "favorite": true,
+      "venmoHandle": "AlexKaveh-Senemar"
     },
     {
       "name": "Nicolas Mesa",
@@ -298,7 +300,8 @@
       "paid": false,
       "rating": 8.5,
       "position": "midfielder",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "Diego-Canales"
     },
     {
       "name": "Eduardo Portet",
@@ -310,7 +313,8 @@
       "paid": false,
       "rating": 7.5,
       "position": "midfielder",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "eportet"
     },
     {
       "name": "Francesco Di Lauro",
@@ -406,7 +410,8 @@
       "paid": false,
       "rating": 6,
       "position": "striker",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "Onurb"
     },
     {
       "name": "Kosidichinma Emmanuel-Anyim",
@@ -430,7 +435,8 @@
       "paid": false,
       "rating": 7.5,
       "position": "midfielder",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "Henar-UrteagaJuangarcia"
     },
     {
       "name": "Henri Thunberg",
@@ -526,7 +532,8 @@
       "paid": false,
       "rating": 6.9,
       "position": "midfielder",
-      "favorite": true
+      "favorite": true,
+      "venmoHandle": "Babak-Bafandeh"
     },
     {
       "name": "Bobby Howie",
@@ -598,7 +605,8 @@
       "paid": false,
       "rating": 7.3,
       "position": "midfielder",
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "juliomb"
     },
     {
       "name": "Marcus Silva",
@@ -682,7 +690,8 @@
       "position": "midfielder",
       "goalkeeper": false,
       "paid": false,
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "miguel_gonzalezfernandez"
     },
     {
       "name": "Leonardo Candidi",
@@ -726,7 +735,8 @@
       "position": "midfielder",
       "goalkeeper": false,
       "paid": false,
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "IAmGil"
     },
     {
       "name": "Sebastian Politi",
@@ -737,7 +747,8 @@
       "position": "defender",
       "goalkeeper": false,
       "paid": false,
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "Sebastian-Politi-"
     },
     {
       "name": "Artur Meller",
@@ -748,7 +759,8 @@
       "position": "midfielder",
       "goalkeeper": false,
       "paid": false,
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "AMeller"
     },
     {
       "name": "Younes Reda",
@@ -759,7 +771,8 @@
       "position": "midfielder",
       "goalkeeper": false,
       "paid": false,
-      "favorite": false
+      "favorite": false,
+      "venmoHandle": "yreda1999"
     },
     {
       "name": "Agustin Medina",
@@ -790,6 +803,127 @@
       "team": "white",
       "rating": 6,
       "position": "defender",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false,
+      "venmoHandle": "JavierVasquezPemueller"
+    },
+    {
+      "name": "Lorenzo Donati",
+      "venmoHandle": "lorenzo-donati",
+      "venmoFullName": "Lorenzo Donati",
+      "whatsAppName": "Lorenzo Donati",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Francesco Coccaro",
+      "venmoHandle": "Francesco-Coccaro",
+      "venmoFullName": "Francesco Coccaro",
+      "whatsAppName": "Francesco Coccaro",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "MarcOlivier LeBlanc",
+      "venmoHandle": "MarcOlivier-LeBlanc",
+      "venmoFullName": "MarcOlivier LeBlanc",
+      "whatsAppName": "MarcOlivier LeBlanc",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Preston Kilgore",
+      "venmoHandle": "Preston-Kilgore",
+      "venmoFullName": "Preston Kilgore",
+      "whatsAppName": "Preston Kilgore",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Kian Katan",
+      "venmoHandle": "Kian-Katanforoosh",
+      "venmoFullName": "Kian Katan",
+      "whatsAppName": "Kian Katan",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Antoine Lagarde",
+      "venmoHandle": "Antoine-Lagarde",
+      "venmoFullName": "Antoine Lagarde",
+      "whatsAppName": "Antoine Lagarde",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Spencer Gordon",
+      "venmoHandle": "Spencer-Gordon-13",
+      "venmoFullName": "Spencer Gordon",
+      "whatsAppName": "Spencer Gordon",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Youma Ohashi-Engel",
+      "venmoHandle": "Youma-Ohashi-Engel",
+      "venmoFullName": "Youma Ohashi-Engel",
+      "whatsAppName": "Youma Ohashi-Engel",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Tiziano Pigliucci",
+      "venmoHandle": "Tiziano12",
+      "venmoFullName": "Tiziano Pigliucci",
+      "whatsAppName": "Tiziano Pigliucci",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
+      "goalkeeper": false,
+      "paid": false,
+      "favorite": false
+    },
+    {
+      "name": "Artillery AG",
+      "venmoHandle": "Artilleryag",
+      "venmoFullName": "Artillery AG",
+      "whatsAppName": "Ivan",
+      "team": "dark",
+      "rating": 7,
+      "position": "midfielder",
       "goalkeeper": false,
       "paid": false,
       "favorite": false

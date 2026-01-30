@@ -40,7 +40,7 @@ export default async function updateUser(req, res) {
       paid = false;
     }
     if (team === undefined) {
-      team = "white";
+      team = "dark"; // Default to dark team
     }
     if (goalkeeper === undefined) {
       goalkeeper = false;

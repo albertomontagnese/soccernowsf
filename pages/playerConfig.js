@@ -42,8 +42,9 @@ function PlayerConfig() {
   const [newPlayer, setNewPlayer] = useState({
     name: '',
     venmoFullName: '',
+    venmoHandle: '', // @username for Venmo requests
     whatsAppName: '',
-    team: 'white',
+    team: 'dark', // Default to dark team
     rating: 7.0,
     position: 'midfielder',
     goalkeeper: false,
@@ -131,11 +132,12 @@ function PlayerConfig() {
     setEditingField(`${player.name}-${field}`);
   };
 
-  const handleSaveEdit = () => {
-    if (!editingPlayer) return;
+  const handleSaveEdit = (overridePlayer = null) => {
+    const playerToSave = overridePlayer || editingPlayer;
+    if (!playerToSave) return;
     
     const updatedPlayers = players.map(p => 
-      p.name === editingPlayer.name ? editingPlayer : p
+      p.name === playerToSave.name ? playerToSave : p
     );
     setPlayers(updatedPlayers);
     setEditingPlayer(null);
@@ -215,8 +217,9 @@ function PlayerConfig() {
       setNewPlayer({
         name: '',
         venmoFullName: '',
+        venmoHandle: '',
         whatsAppName: '',
-        team: 'white',
+        team: 'dark',
         rating: 7.0,
         position: 'midfielder',
         goalkeeper: false,
@@ -906,6 +909,7 @@ function PlayerConfig() {
               <TableCell>Rating</TableCell>
               <TableCell>Position</TableCell>
               <TableCell>Preferred Team</TableCell>
+              <TableCell>Venmo Handle</TableCell>
               <TableCell>Venmo Name</TableCell>
               <TableCell>WhatsApp Name</TableCell>
               <TableCell>Actions</TableCell>
@@ -966,9 +970,10 @@ function PlayerConfig() {
                       <Select
                         value={editingPlayer.position}
                         onChange={(e) => {
-                          setEditingPlayer({...editingPlayer, position: e.target.value});
-                          // Auto-save immediately for select fields
-                          setTimeout(() => handleSaveEdit(), 100);
+                          const updatedPlayer = {...editingPlayer, position: e.target.value};
+                          setEditingPlayer(updatedPlayer);
+                          // Save immediately with the updated player
+                          handleSaveEdit(updatedPlayer);
                         }}
                         autoFocus
                       >
@@ -992,9 +997,10 @@ function PlayerConfig() {
                       <Select
                         value={editingPlayer.team}
                         onChange={(e) => {
-                          setEditingPlayer({...editingPlayer, team: e.target.value});
-                          // Auto-save immediately for select fields
-                          setTimeout(() => handleSaveEdit(), 100);
+                          const updatedPlayer = {...editingPlayer, team: e.target.value};
+                          setEditingPlayer(updatedPlayer);
+                          // Save immediately with the updated player
+                          handleSaveEdit(updatedPlayer);
                         }}
                         autoFocus
                       >
@@ -1004,6 +1010,22 @@ function PlayerConfig() {
                     </FormControl>
                   ) : (
                     player.team === 'white' ? '🏳️ White' : '🏴 Dark'
+                  )}
+                </TableCell>
+                <TableCell onClick={() => handleEditField(player, 'venmoHandle')} sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' } }}>
+                  {editingField === `${player.name}-venmoHandle` ? (
+                    <TextField
+                      value={editingPlayer.venmoHandle || ''}
+                      onChange={(e) => setEditingPlayer({...editingPlayer, venmoHandle: e.target.value})}
+                      onBlur={handleFieldBlur}
+                      onKeyDown={handleFieldKeyDown}
+                      size="small"
+                      autoFocus
+                      fullWidth
+                      placeholder="@username"
+                    />
+                  ) : (
+                    player.venmoHandle ? `@${player.venmoHandle.replace('@', '')}` : <em style={{color: '#999'}}>Click to edit</em>
                   )}
                 </TableCell>
                 <TableCell onClick={() => handleEditField(player, 'venmoFullName')} sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' } }}>
@@ -1059,6 +1081,16 @@ function PlayerConfig() {
             variant="outlined"
             value={newPlayer.name}
             onChange={(e) => setNewPlayer({...newPlayer, name: e.target.value})}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Venmo Handle (@username)"
+            fullWidth
+            variant="outlined"
+            value={newPlayer.venmoHandle}
+            onChange={(e) => setNewPlayer({...newPlayer, venmoHandle: e.target.value})}
+            placeholder="@johndoe"
             sx={{ mb: 2 }}
           />
           <TextField

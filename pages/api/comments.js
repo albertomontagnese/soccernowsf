@@ -80,8 +80,38 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Comment deleted' });
     }
     
+    else if (req.method === 'PATCH') {
+      // Migrate comments from one game ID to another
+      const { fromGameId, toGameId } = req.body;
+      
+      if (!fromGameId || !toGameId) {
+        return res.status(400).json({ message: 'fromGameId and toGameId are required' });
+      }
+      
+      const commentsRef = getCommentsCollection();
+      const snapshot = await commentsRef.where('gameId', '==', fromGameId).get();
+      
+      if (snapshot.empty) {
+        return res.status(400).json({ message: `No comments found for game ${fromGameId}` });
+      }
+      
+      let migratedCount = 0;
+      for (const doc of snapshot.docs) {
+        await commentsRef.doc(doc.id).update({
+          gameId: toGameId,
+          migratedFrom: fromGameId,
+          migratedAt: new Date().toISOString()
+        });
+        migratedCount++;
+      }
+      
+      return res.status(200).json({ 
+        message: `Migrated ${migratedCount} comments from ${fromGameId} to ${toGameId}` 
+      });
+    }
+    
     else {
-      res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
+      res.setHeader('Allow', ['GET', 'POST', 'DELETE', 'PATCH']);
       return res.status(405).json({ message: `Method ${req.method} not allowed` });
     }
   } catch (error) {

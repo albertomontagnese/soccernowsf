@@ -47,7 +47,7 @@ export async function autoPopulatePlayerData(playerName, venmoName = null) {
       name: playerName,
       venmoFullName: venmoName || playerName,
       whatsAppName: playerName,
-      team: 'white', // Default to white team
+      team: 'dark', // Default to dark team
       rating: 7.0,   // Default rating
       position: 'midfielder',
       goalkeeper: false,
@@ -98,7 +98,7 @@ async function getPlayerPaymentHistory(playerName) {
 function generateSmartDefaults(playerName, venmoName, paymentHistory) {
   const defaults = {
     whatsAppName: playerName,
-    preferredTeam: 'white',
+    preferredTeam: 'dark', // Default to dark team
     rating: 7.0,
     position: 'midfielder',
     goalkeeper: false,
@@ -116,13 +116,13 @@ function generateSmartDefaults(playerName, venmoName, paymentHistory) {
 
     // Use most common team preference
     const teamCounts = paymentHistory.reduce((acc, payment) => {
-      const team = payment.team || 'white';
+      const team = payment.team || 'dark';
       acc[team] = (acc[team] || 0) + 1;
       return acc;
     }, {});
 
     const mostCommonTeam = Object.keys(teamCounts).reduce((a, b) => 
-      teamCounts[a] > teamCounts[b] ? a : b, 'white'
+      teamCounts[a] > teamCounts[b] ? a : b, 'dark'
     );
 
     defaults.preferredTeam = mostCommonTeam;
