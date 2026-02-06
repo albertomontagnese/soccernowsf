@@ -141,6 +141,9 @@ async function autoArchivePreviousGame(todayInPT, allPayments) {
 
 export default async function user(req, res) {
   try {
+    // Debug mode - return all payments without date filtering
+    const { debug } = req.query;
+    
     // Calculate the soccer week cycle: Friday 00:01 PST to Thursday 23:59 PST
     // Game is Thursday 7pm PST (19:00), cycle ends Thursday 23:59 PST  
     // New cycle starts Friday 00:01 PST
@@ -222,10 +225,13 @@ export default async function user(req, res) {
     }
 
     // Filter by the soccer week cycle (Friday 00:01 to Thursday 23:59)
-    const filteredData = dynamoData.Items.filter((item) => {
-      const itemTimestamp = parseInt(item.date, 10);
-      return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
-    });
+    // Skip filtering if debug=true (for troubleshooting)
+    const filteredData = debug === 'true' 
+      ? dynamoData.Items 
+      : dynamoData.Items.filter((item) => {
+          const itemTimestamp = parseInt(item.date, 10);
+          return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
+        });
     
     console.log(`📊 Debug - Total DB items: ${dynamoData.Items.length}, after date filter: ${filteredData.length}`);
     console.log(`📅 Current cycle: ${new Date(startTimestamp).toLocaleString()} to ${new Date(endTimestamp).toLocaleString()}`);
