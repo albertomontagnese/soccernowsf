@@ -294,24 +294,28 @@ export default async function user(req, res) {
 
     waitlist.sort((a, b) => parseInt(a.date) - parseInt(b.date));
 
+    // Include all players that passed date filter for debugging
+    const allFilteredNames = filteredData.map(p => p.name);
+    
     res.status(200).json({
       message: "Data filtered successfully",
       data: mergedData,
       whiteTeam,
       darkTeam,
       waitlist,
-              debug: {
-          todayInPT: todayInPT.toString(),
-          thursdayGameDate: thursdayGameDate.toString(),
-          soccerWeekStart: cycleStartFriday.toString(),
-          soccerWeekEnd: cycleEndThursday.toString(),
-          totalFromDB: dynamoData.Items.length,
-          afterDateFilter: filteredData.length,
-          finalPlayerCount: mergedData.length,
-          whiteTeamCount: whiteTeam.length,
-          darkTeamCount: darkTeam.length,
-          waitlistCount: waitlist.length
-        }
+      debug: {
+        todayInPT: todayInPT.toString(),
+        thursdayGameDate: thursdayGameDate.toString(),
+        soccerWeekStart: cycleStartFriday.toString(),
+        soccerWeekEnd: cycleEndThursday.toString(),
+        totalFromDB: dynamoData.Items.length,
+        afterDateFilter: filteredData.length,
+        finalPlayerCount: mergedData.length,
+        whiteTeamCount: whiteTeam.length,
+        darkTeamCount: darkTeam.length,
+        waitlistCount: waitlist.length,
+        allFilteredNames: allFilteredNames
+      }
     });
   } catch (error) {
     console.error("API Error details:", error);
