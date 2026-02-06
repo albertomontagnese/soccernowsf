@@ -268,8 +268,9 @@ function EditSoccerNow({ isEditMode = true }) {
 
   const handleSaveNewRecord = async () => {
     try {
-      if (!record && !record?.name) {
+      if (!record || !record?.name) {
         console.error("No player selected or player name is missing.");
+        alert("Please select or enter a player name");
         return;
       }
 
