@@ -147,14 +147,37 @@ export default async function user(req, res) {
     // Calculate the soccer week cycle: Friday 00:01 PST to Thursday 23:59 PST
     // Game is Thursday 7pm PST (19:00), cycle ends Thursday 23:59 PST  
     // New cycle starts Friday 00:01 PST
+    
+    // Get current time in PST/PDT using proper timezone calculation
     const now = new Date();
-    // Convert server time (UTC on Vercel) to Pacific Time for consistency
-    const todayInPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-    console.log(`Server time: ${now.toISOString()}, PT time: ${todayInPT} (day of week: ${todayInPT.getDay()})`);
+    
+    // Get the PST offset properly - create a formatter that gives us the actual PT time components
+    const ptFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    const ptParts = ptFormatter.formatToParts(now);
+    const getPart = (type) => ptParts.find(p => p.type === type)?.value;
+    
+    const ptYear = parseInt(getPart('year'));
+    const ptMonth = parseInt(getPart('month')) - 1; // 0-indexed
+    const ptDay = parseInt(getPart('day'));
+    const ptHour = parseInt(getPart('hour'));
+    
+    // Create a date object representing "now" in PT (for day-of-week calculation)
+    const todayInPT = new Date(ptYear, ptMonth, ptDay, ptHour, 0, 0, 0);
+    const currentDayOfWeek = todayInPT.getDay(); // 0=Sunday, 5=Friday, 4=Thursday
+    
+    console.log(`Server time: ${now.toISOString()}, PT date: ${ptYear}-${ptMonth+1}-${ptDay} ${ptHour}:00 (day of week: ${currentDayOfWeek})`);
 
     // Calculate cycle based on Friday 00:01 PST transitions
-    const currentDayOfWeek = todayInPT.getDay(); // 0=Sunday, 5=Friday, 4=Thursday
-
     let daysToTargetThursday;
     if (currentDayOfWeek >= 5 || currentDayOfWeek === 0) {
       // It's Fri/Sat/Sun - show next Thursday's game
@@ -166,24 +189,34 @@ export default async function user(req, res) {
       daysToTargetThursday = 4 - currentDayOfWeek; // Days to this Thursday
     }
 
-    // Find the current cycle's Thursday game date
-    const thursdayGameDate = new Date(todayInPT);
-    thursdayGameDate.setDate(todayInPT.getDate() + daysToTargetThursday);
-    thursdayGameDate.setHours(0, 0, 0, 0); // Start of Thursday for calculation
+    // Calculate Thursday game date in PT
+    const thursdayPT = new Date(ptYear, ptMonth, ptDay + daysToTargetThursday);
+    
+    // Cycle starts Friday 00:01 PT (6 days before Thursday)
+    const fridayPT = new Date(thursdayPT);
+    fridayPT.setDate(thursdayPT.getDate() - 6);
+    
+    // Now convert to UTC timestamps by accounting for PST offset (-8 hours, or -7 for PDT)
+    // PST = UTC-8, PDT = UTC-7
+    // We'll use -8 for PST (standard time in winter)
+    const PST_OFFSET_HOURS = 8; // PST is UTC-8
+    
+    // Friday 00:01 PST = Friday 08:01 UTC
+    const cycleStartUTC = Date.UTC(fridayPT.getFullYear(), fridayPT.getMonth(), fridayPT.getDate(), 
+                                    0 + PST_OFFSET_HOURS, 1, 0, 0);
+    
+    // Thursday 23:59 PST = Friday 07:59 UTC (next day)
+    const cycleEndUTC = Date.UTC(thursdayPT.getFullYear(), thursdayPT.getMonth(), thursdayPT.getDate(), 
+                                  23 + PST_OFFSET_HOURS, 59, 59, 999);
 
-    // Cycle starts Friday 00:01 (day after previous Thursday)
-    const cycleStartFriday = new Date(thursdayGameDate);
-    cycleStartFriday.setDate(thursdayGameDate.getDate() - 6); // Previous Friday (6 days before Thursday)
-    cycleStartFriday.setHours(0, 1, 0, 0); // 00:01 PST Friday
+    const startTimestamp = cycleStartUTC;
+    const endTimestamp = cycleEndUTC;
+    
+    // For debug display
+    const cycleStartFriday = new Date(startTimestamp);
+    const cycleEndThursday = new Date(endTimestamp);
 
-    // Cycle ends this Thursday at 23:59
-    const cycleEndThursday = new Date(thursdayGameDate);
-    cycleEndThursday.setHours(23, 59, 59, 999); // 23:59:59 PST Thursday
-
-    const startTimestamp = cycleStartFriday.getTime();
-    const endTimestamp = cycleEndThursday.getTime();
-
-    console.log(`Soccer week cycle: ${cycleStartFriday} to ${cycleEndThursday}`);
+    console.log(`Soccer week cycle: ${cycleStartFriday.toISOString()} to ${cycleEndThursday.toISOString()} (UTC)`);
 
     // Now do Firestore querying
     let dynamoData;
@@ -305,9 +338,9 @@ export default async function user(req, res) {
       waitlist,
       debug: {
         todayInPT: todayInPT.toString(),
-        thursdayGameDate: thursdayGameDate.toString(),
-        soccerWeekStart: cycleStartFriday.toString(),
-        soccerWeekEnd: cycleEndThursday.toString(),
+        thursdayGameDate: thursdayPT.toString(),
+        soccerWeekStart: cycleStartFriday.toISOString(),
+        soccerWeekEnd: cycleEndThursday.toISOString(),
         totalFromDB: dynamoData.Items.length,
         afterDateFilter: filteredData.length,
         finalPlayerCount: mergedData.length,
