@@ -20,6 +20,60 @@ function dateToTimestamp(dateString) {
   }
 }
 
+function getCurrentCycleWindowUtc() {
+  const now = new Date();
+  const ptFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false
+  });
+  const ptParts = ptFormatter.formatToParts(now);
+  const getPart = (type) => ptParts.find((p) => p.type === type)?.value;
+
+  const ptYear = parseInt(getPart('year'), 10);
+  const ptMonth = parseInt(getPart('month'), 10) - 1;
+  const ptDay = parseInt(getPart('day'), 10);
+  const ptHour = parseInt(getPart('hour'), 10);
+  const todayInPT = new Date(ptYear, ptMonth, ptDay, ptHour, 0, 0, 0);
+  const currentDayOfWeek = todayInPT.getDay();
+
+  let daysToTargetThursday;
+  if (currentDayOfWeek >= 5 || currentDayOfWeek === 0) {
+    daysToTargetThursday = currentDayOfWeek === 5 ? 6 : currentDayOfWeek === 6 ? 5 : 4;
+  } else {
+    daysToTargetThursday = 4 - currentDayOfWeek;
+  }
+
+  const thursdayPT = new Date(ptYear, ptMonth, ptDay + daysToTargetThursday);
+  const fridayPT = new Date(thursdayPT);
+  fridayPT.setDate(thursdayPT.getDate() - 6);
+
+  const PST_OFFSET_HOURS = 8;
+  const cycleStartUtc = Date.UTC(
+    fridayPT.getFullYear(),
+    fridayPT.getMonth(),
+    fridayPT.getDate(),
+    PST_OFFSET_HOURS,
+    1,
+    0,
+    0
+  );
+  const cycleEndUtc = Date.UTC(
+    thursdayPT.getFullYear(),
+    thursdayPT.getMonth(),
+    thursdayPT.getDate(),
+    23 + PST_OFFSET_HOURS,
+    59,
+    59,
+    999
+  );
+
+  return { cycleStartUtc, cycleEndUtc };
+}
+
 export default async function updateUser(req, res) {
   try {
     let { id, name, money, date, paid, team, goalkeeper, teamOverridden } = req.body;
@@ -147,6 +201,57 @@ export default async function updateUser(req, res) {
       } catch (playerError) {
         console.error('Error checking player config:', playerError);
         // Continue with original data if config check fails
+      }
+
+      // Auto-balance new players across teams unless explicitly overridden.
+      // Rule:
+      // - If one team already has >=8 and the other has <8, force new player to the other team.
+      // - If both teams are full (>=8), keep assignment and let waitlist logic handle overflow.
+      if (!hasExistingRecord && !teamOverridden) {
+        try {
+          const { cycleStartUtc, cycleEndUtc } = getCurrentCycleWindowUtc();
+          const cycleSnapshot = await paymentsRef.where('money', '==', 7).get();
+          const cycleItems = cycleSnapshot.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((item) => {
+              const ts = parseInt(item.date || "0", 10);
+              return ts >= cycleStartUtc && ts <= cycleEndUtc;
+            });
+
+          const groupedByName = cycleItems.reduce((acc, item) => {
+            acc[item.name] = acc[item.name] || [];
+            acc[item.name].push(item);
+            return acc;
+          }, {});
+
+          const mergedCycle = Object.values(groupedByName).map((group) => {
+            const sortedGroup = [...group].sort(
+              (a, b) => parseInt(b.date || "0", 10) - parseInt(a.date || "0", 10)
+            );
+            return sortedGroup.find((item) => item.paid) || sortedGroup[0];
+          });
+
+          const whiteCount = mergedCycle.filter((item) => item.team === "white").length;
+          const darkCount = mergedCycle.filter((item) => item.team === "dark").length;
+
+          let autoAssignedTeam = finalUpdatedUserData.team || "dark";
+          if (whiteCount >= 8 && darkCount < 8) {
+            autoAssignedTeam = "dark";
+          } else if (darkCount >= 8 && whiteCount < 8) {
+            autoAssignedTeam = "white";
+          }
+
+          finalUpdatedUserData = {
+            ...finalUpdatedUserData,
+            team: autoAssignedTeam,
+          };
+
+          console.log(
+            `Auto-balance assignment for ${name}: white=${whiteCount}, dark=${darkCount}, assigned=${autoAssignedTeam}`
+          );
+        } catch (balanceError) {
+          console.error("Error auto-balancing team assignment:", balanceError);
+        }
       }
 
       // Merge existing record with updated data

@@ -311,31 +311,30 @@ export default async function user(req, res) {
       }
     });
 
-    // Handle waitlist logic (manual/editable waitlist currently based on overflow + unpaid priority)
+    const getQueueTimestamp = (item) => {
+      const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
+      return parseInt(queueTs, 10) || 0;
+    };
+
+    // Handle waitlist logic: once total > 16, latest joiners become waitlist
     const totalPlayers = whiteTeam.length + darkTeam.length;
     if (totalPlayers > 16) {
       const overCount = totalPlayers - 16;
       const allPlayers = [...whiteTeam, ...darkTeam].sort(
-        (a, b) => parseInt(b.date) - parseInt(a.date)
-      ); // Latest first
-      let unpaidPlayers = allPlayers.filter((item) => !item.paid);
+        (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
+      ); // Latest first by queue timestamp
 
-      // Move latest unpaid players to waitlist
-      waitlist = unpaidPlayers.slice(0, overCount);
+      waitlist = allPlayers.slice(0, overCount);
 
       // Remove waitlisted players from their teams
       whiteTeam = whiteTeam.filter((item) => !waitlist.includes(item));
       darkTeam = darkTeam.filter((item) => !waitlist.includes(item));
     }
 
-    waitlist.sort((a, b) => parseInt(a.date) - parseInt(b.date));
+    waitlist.sort((a, b) => getQueueTimestamp(a) - getQueueTimestamp(b));
 
     // Read-only theoretical waitlist:
     // if >16 paid players are "in", overflow paid players are queued by payment time.
-    const getQueueTimestamp = (item) => {
-      const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
-      return parseInt(queueTs, 10) || 0;
-    };
 
     const paidQueue = mergedData
       .filter((item) => item.paid)
