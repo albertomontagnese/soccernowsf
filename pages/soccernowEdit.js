@@ -36,7 +36,7 @@ import {
 } from "../helpers/playerData";
 import { noCacheHeaders } from "../helpers/misc";
 
-const HARDCODED_USERNAME = "alberto";
+const HARDCODED_USERNAME = "Alberto";
 const HARDCODED_PASSWORD = "ForzaJuve+";
 
 function EditSoccerNow({ isEditMode = true }) {
@@ -60,6 +60,8 @@ function EditSoccerNow({ isEditMode = true }) {
   const [whiteTeam, setWhiteTeam] = useState([]);
   const [darkTeam, setDarkTeam] = useState([]);
   const [waitlist, setWaitlist] = useState([]);
+  const [theoreticalWaitlist, setTheoreticalWaitlist] = useState([]);
+  const [latePayersNotWaitlist, setLatePayersNotWaitlist] = useState([]);
   const [dynamicPlayers, setDynamicPlayers] = useState(allPlayers);
   const [isAutoPrefilled, setIsAutoPrefilled] = useState(false);
 
@@ -109,6 +111,8 @@ function EditSoccerNow({ isEditMode = true }) {
       setWhiteTeam(data.whiteTeam);
       setDarkTeam(data.darkTeam);
       setWaitlist(data.waitlist);
+      setTheoreticalWaitlist(data.theoreticalWaitlist || []);
+      setLatePayersNotWaitlist(data.latePayersNotWaitlist || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -408,6 +412,27 @@ function EditSoccerNow({ isEditMode = true }) {
           </Button>
         </div>
       )}
+
+      {isEditMode && (
+        <Paper className="p-4 mb-4" style={{ backgroundColor: "#f5f5f5" }}>
+          <h3 className="text-lg font-bold mb-2">📋 Theoretical Waitlist (Read-only)</h3>
+          <p className="text-sm text-gray-700 mb-2">
+            Based only on paid players, ordered by payment time. First 16 paid are in; overflow is theoretical waitlist.
+          </p>
+          {theoreticalWaitlist.length === 0 ? (
+            <p className="text-sm text-green-700">No theoretical waitlist right now.</p>
+          ) : (
+            <div className="space-y-1">
+              {theoreticalWaitlist.map((player) => (
+                <div key={player.id} className="text-sm">
+                  #{player.theoreticalWaitlistOrder} {player.name} - paid at{" "}
+                  {timestampToReadableDate(player.theoreticalQueueTimestamp || player.date, true)}
+                </div>
+              ))}
+            </div>
+          )}
+        </Paper>
+      )}
       
       {/* Venmo Request Links for Unpaid Players */}
       {isEditMode && payments.filter(p => !p.paid).length > 0 && (
@@ -562,6 +587,31 @@ function EditSoccerNow({ isEditMode = true }) {
                 )}
               </TableBody>
             </Table>
+
+            {latePayersNotWaitlist.length > 0 && (
+              <Paper className="p-3 mt-3 mb-2" style={{ backgroundColor: "#f5f5f5" }}>
+                <div className="font-semibold mb-1">⏰ Late Payers (Not in Waitlist)</div>
+                <div className="text-sm text-gray-700 mb-2">
+                  Ordered latest payment first. Excludes current waitlist players.
+                </div>
+                <details>
+                  <summary style={{ cursor: "pointer" }}>
+                    Show 5 extra late payers
+                  </summary>
+                  <div className="mt-2 space-y-1 text-sm">
+                    {latePayersNotWaitlist.slice(0, 5).map((player, idx) => (
+                      <div key={player.id || `${player.name}-${idx}`}>
+                        {idx + 1}. {player.name} - paid at{" "}
+                        {timestampToReadableDate(
+                          player.latePayerTimestamp || player.paidAt || player.createdAt || player.date,
+                          true
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </Paper>
+            )}
           </>
         )}
       </TableContainer>

@@ -288,7 +288,10 @@ export default async function user(req, res) {
     }, {});
 
     let mergedData = Object.values(groupedByName).map((group) => {
-      return group.find((item) => item.paid) || group[0];
+      const sortedGroup = [...group].sort(
+        (a, b) => parseInt(b.date || "0", 10) - parseInt(a.date || "0", 10)
+      );
+      return sortedGroup.find((item) => item.paid) || sortedGroup[0];
     });
 
     // Initialize team arrays
@@ -308,7 +311,7 @@ export default async function user(req, res) {
       }
     });
 
-    // Handle waitlist logic
+    // Handle waitlist logic (manual/editable waitlist currently based on overflow + unpaid priority)
     const totalPlayers = whiteTeam.length + darkTeam.length;
     if (totalPlayers > 16) {
       const overCount = totalPlayers - 16;
@@ -327,6 +330,40 @@ export default async function user(req, res) {
 
     waitlist.sort((a, b) => parseInt(a.date) - parseInt(b.date));
 
+    // Read-only theoretical waitlist:
+    // if >16 paid players are "in", overflow paid players are queued by payment time.
+    const getQueueTimestamp = (item) => {
+      const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
+      return parseInt(queueTs, 10) || 0;
+    };
+
+    const paidQueue = mergedData
+      .filter((item) => item.paid)
+      .sort((a, b) => getQueueTimestamp(a) - getQueueTimestamp(b));
+
+    const theoreticalWaitlist =
+      paidQueue.length > 16
+        ? paidQueue.slice(16).map((item, idx) => ({
+            ...item,
+            theoreticalWaitlistOrder: idx + 1,
+            theoreticalQueueTimestamp: getQueueTimestamp(item),
+          }))
+        : [];
+
+    const theoreticalWaitlistIds = new Set(
+      theoreticalWaitlist.map((item) => item.id || item.name)
+    );
+
+    // Late payers still "in" (not on waitlist), reverse order = latest first.
+    const latePayersNotWaitlist = paidQueue
+      .filter((item) => !theoreticalWaitlistIds.has(item.id || item.name))
+      .sort((a, b) => getQueueTimestamp(b) - getQueueTimestamp(a))
+      .map((item, idx) => ({
+        ...item,
+        latePayerOrder: idx + 1,
+        latePayerTimestamp: getQueueTimestamp(item),
+      }));
+
     // Include all players that passed date filter for debugging
     const allFilteredNames = filteredData.map(p => p.name);
     
@@ -336,6 +373,8 @@ export default async function user(req, res) {
       whiteTeam,
       darkTeam,
       waitlist,
+      theoreticalWaitlist,
+      latePayersNotWaitlist,
       debug: {
         todayInPT: todayInPT.toString(),
         thursdayGameDate: thursdayPT.toString(),
@@ -344,9 +383,12 @@ export default async function user(req, res) {
         totalFromDB: dynamoData.Items.length,
         afterDateFilter: filteredData.length,
         finalPlayerCount: mergedData.length,
+        paidQueueCount: paidQueue.length,
         whiteTeamCount: whiteTeam.length,
         darkTeamCount: darkTeam.length,
         waitlistCount: waitlist.length,
+        theoreticalWaitlistCount: theoreticalWaitlist.length,
+        latePayersNotWaitlistCount: latePayersNotWaitlist.length,
         allFilteredNames: allFilteredNames
       }
     });

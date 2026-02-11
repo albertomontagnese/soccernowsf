@@ -50,6 +50,7 @@ export default async function updateUser(req, res) {
     }
 
     let existingRecord = {};
+    let hasExistingRecord = false;
     const paymentsRef = getPaymentsCollection();
     const playersRef = getPlayersCollection();
 
@@ -62,6 +63,7 @@ export default async function updateUser(req, res) {
 
       if (docSnap.exists) {
         existingRecord = { id: docSnap.id, ...docSnap.data() };
+        hasExistingRecord = true;
       } else {
         console.log("No existing record found");
       }
@@ -72,15 +74,39 @@ export default async function updateUser(req, res) {
     }
     try {
       // Modify the user data
+      const nowIso = new Date().toISOString();
+      const nowTs = Date.now().toString();
+      const existingPaid = Boolean(existingRecord?.paid);
+      const incomingPaid = Boolean(paid);
+
+      // Keep immutable creation ordering so manual edits do not affect queue order.
+      const createdAt = existingRecord?.createdAt || date || newId || nowTs;
+
+      // paidAt tracks when player entered the paid queue (first transition to paid=true).
+      let paidAt = existingRecord?.paidAt || null;
+      if (incomingPaid) {
+        if (!existingPaid) {
+          paidAt = nowTs;
+        } else if (!paidAt) {
+          paidAt = existingRecord?.date || newId || nowTs;
+        }
+      } else {
+        paidAt = null;
+      }
+
       const updatedUserData = {
         id: newId,
         name: name,
         money: money,
         date: date,
-        paid: paid,
+        paid: incomingPaid,
         team: team,
-        goalkeeper: goalkeeper,
+        goalkeeper: Boolean(goalkeeper),
         teamOverridden: teamOverridden,
+        createdAt,
+        paidAt,
+        lastEditedAt: nowIso,
+        createdByApiAt: hasExistingRecord ? existingRecord?.createdByApiAt : nowIso,
       };
 
       console.log("data to be stored");
