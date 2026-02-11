@@ -299,11 +299,14 @@ export default async function user(req, res) {
       darkTeam = [],
       waitlist = [];
 
-    // Sort mergedData by timestamp to ensure latest records are processed last
-    mergedData.sort((a, b) => parseInt(a.date) - parseInt(b.date));
+    // Sort by timestamp to ensure deterministic processing
+    mergedData.sort((a, b) => parseInt(a.date || "0", 10) - parseInt(b.date || "0", 10));
 
-    // Allocate to teams and potentially to waitlist
-    mergedData.forEach((item) => {
+    const manuallyWaitlisted = mergedData.filter((item) => Boolean(item.manualWaitlist));
+    const activeCandidates = mergedData.filter((item) => !item.manualWaitlist);
+
+    // Allocate active candidates to teams
+    activeCandidates.forEach((item) => {
       if (item.team === "white") {
         whiteTeam.push(item);
       } else if (item.team === "dark") {
@@ -316,21 +319,23 @@ export default async function user(req, res) {
       return parseInt(queueTs, 10) || 0;
     };
 
-    // Handle waitlist logic: once total > 16, latest joiners become waitlist
+    // Handle waitlist logic: manual waitlist first, then overflow from active players.
     const totalPlayers = whiteTeam.length + darkTeam.length;
+    let autoWaitlist = [];
     if (totalPlayers > 16) {
       const overCount = totalPlayers - 16;
       const allPlayers = [...whiteTeam, ...darkTeam].sort(
         (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
       ); // Latest first by queue timestamp
 
-      waitlist = allPlayers.slice(0, overCount);
+      autoWaitlist = allPlayers.slice(0, overCount);
 
       // Remove waitlisted players from their teams
-      whiteTeam = whiteTeam.filter((item) => !waitlist.includes(item));
-      darkTeam = darkTeam.filter((item) => !waitlist.includes(item));
+      whiteTeam = whiteTeam.filter((item) => !autoWaitlist.includes(item));
+      darkTeam = darkTeam.filter((item) => !autoWaitlist.includes(item));
     }
 
+    waitlist = [...manuallyWaitlisted, ...autoWaitlist];
     waitlist.sort((a, b) => getQueueTimestamp(a) - getQueueTimestamp(b));
 
     // Read-only theoretical waitlist:

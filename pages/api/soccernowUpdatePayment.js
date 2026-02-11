@@ -76,7 +76,7 @@ function getCurrentCycleWindowUtc() {
 
 export default async function updateUser(req, res) {
   try {
-    let { id, name, money, date, paid, team, goalkeeper, teamOverridden } = req.body;
+    let { id, name, money, date, paid, team, goalkeeper, teamOverridden, manualWaitlist } = req.body;
     // for any of this if it's undefined make it = "". paid make it false
 
     const newId = id ? id : dateToTimestamp(date);
@@ -102,7 +102,6 @@ export default async function updateUser(req, res) {
     if (teamOverridden === undefined) {
       teamOverridden = false;
     }
-
     let existingRecord = {};
     let hasExistingRecord = false;
     const paymentsRef = getPaymentsCollection();
@@ -132,6 +131,10 @@ export default async function updateUser(req, res) {
       const nowTs = Date.now().toString();
       const existingPaid = Boolean(existingRecord?.paid);
       const incomingPaid = Boolean(paid);
+      const resolvedManualWaitlist =
+        manualWaitlist === undefined
+          ? Boolean(existingRecord?.manualWaitlist)
+          : Boolean(manualWaitlist);
 
       // Keep immutable creation ordering so manual edits do not affect queue order.
       const createdAt = existingRecord?.createdAt || date || newId || nowTs;
@@ -157,10 +160,11 @@ export default async function updateUser(req, res) {
         team: team,
         goalkeeper: Boolean(goalkeeper),
         teamOverridden: teamOverridden,
+        manualWaitlist: resolvedManualWaitlist,
         createdAt,
         paidAt,
         lastEditedAt: nowIso,
-        createdByApiAt: hasExistingRecord ? existingRecord?.createdByApiAt : nowIso,
+        createdByApiAt: existingRecord?.createdByApiAt || nowIso,
       };
 
       console.log("data to be stored");

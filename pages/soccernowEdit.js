@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Container,
   Table,
@@ -64,6 +64,148 @@ function EditSoccerNow({ isEditMode = true }) {
   const [latePayersNotWaitlist, setLatePayersNotWaitlist] = useState([]);
   const [dynamicPlayers, setDynamicPlayers] = useState(allPlayers);
   const [isAutoPrefilled, setIsAutoPrefilled] = useState(false);
+  const [swapTargets, setSwapTargets] = useState({});
+  const [latePayerSortBy, setLatePayerSortBy] = useState("paymentTime");
+  const [latePayerSortDirection, setLatePayerSortDirection] = useState("desc");
+
+  const normalizeName = (value) => (value || "").toLowerCase().trim();
+
+  const defaultTeamByName = useMemo(() => {
+    const map = {};
+    (dynamicPlayers || []).forEach((player) => {
+      if (player?.name) {
+        map[normalizeName(player.name)] = player.team || "dark";
+      }
+    });
+    return map;
+  }, [dynamicPlayers]);
+
+  const sortedLatePayers = useMemo(() => {
+    const rows = [...(latePayersNotWaitlist || [])].map((player) => {
+      const paymentTime = parseInt(
+        player.latePayerTimestamp || player.paidAt || player.createdAt || player.date || player.id || "0",
+        10
+      );
+      return {
+        ...player,
+        paymentTime,
+        defaultTeam: defaultTeamByName[normalizeName(player.name)] || "dark",
+      };
+    });
+
+    rows.sort((a, b) => {
+      let left;
+      let right;
+      if (latePayerSortBy === "name") {
+        left = (a.name || "").toLowerCase();
+        right = (b.name || "").toLowerCase();
+      } else if (latePayerSortBy === "defaultTeam") {
+        left = a.defaultTeam || "dark";
+        right = b.defaultTeam || "dark";
+      } else if (latePayerSortBy === "currentTeam") {
+        left = a.team || "dark";
+        right = b.team || "dark";
+      } else {
+        left = a.paymentTime || 0;
+        right = b.paymentTime || 0;
+      }
+
+      if (left < right) return latePayerSortDirection === "asc" ? -1 : 1;
+      if (left > right) return latePayerSortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return rows;
+  }, [latePayersNotWaitlist, defaultTeamByName, latePayerSortBy, latePayerSortDirection]);
+
+  const getQueueTimestamp = (player) =>
+    parseInt(player?.paidAt || player?.createdAt || player?.date || player?.id || "0", 10) || 0;
+
+  const activePlayersForSwap = useMemo(() => {
+    return [...(whiteTeam || []), ...(darkTeam || [])].sort(
+      (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
+    );
+  }, [whiteTeam, darkTeam]);
+
+  const handleLatePayerSort = (sortKey) => {
+    if (latePayerSortBy === sortKey) {
+      setLatePayerSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setLatePayerSortBy(sortKey);
+    setLatePayerSortDirection(sortKey === "paymentTime" ? "desc" : "asc");
+  };
+
+  const getCurrentThursdayDateLabel = () => {
+    const now = new Date();
+    const ptNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const day = ptNow.getDay(); // 0 Sun ... 4 Thu ... 6 Sat
+    const daysToThursday = day <= 4 ? 4 - day : 11 - day;
+    const thursday = new Date(ptNow);
+    thursday.setDate(ptNow.getDate() + daysToThursday);
+    const year = thursday.getFullYear();
+    const month = String(thursday.getMonth() + 1).padStart(2, "0");
+    const date = String(thursday.getDate()).padStart(2, "0");
+    return `${year}-${month}-${date}`;
+  };
+
+  const handleSwapInFromWaitlist = async (waitlistPlayer, swapOutId) => {
+    if (!waitlistPlayer?.id) return;
+    if (!activePlayersForSwap.length) {
+      alert("No active player available to swap out.");
+      return;
+    }
+
+    const swapOut = activePlayersForSwap.find((p) => p.id === swapOutId);
+    if (!swapOut) {
+      alert("Select a player to swap out first.");
+      return;
+    }
+    const message = `Swap in ${waitlistPlayer.name} and move ${swapOut.name} to waitlist?`;
+    if (!confirm(message)) return;
+
+    try {
+      const bringInPayload = {
+        ...waitlistPlayer,
+        manualWaitlist: false,
+      };
+      const moveOutPayload = {
+        ...swapOut,
+        manualWaitlist: true,
+      };
+
+      const [bringInRes, moveOutRes] = await Promise.all([
+        fetch("/api/soccernowUpdatePayment", {
+          method: "PUT",
+          body: JSON.stringify(bringInPayload),
+          headers: noCacheHeaders,
+          cache: "no-cache",
+        }),
+        fetch("/api/soccernowUpdatePayment", {
+          method: "PUT",
+          body: JSON.stringify(moveOutPayload),
+          headers: noCacheHeaders,
+          cache: "no-cache",
+        }),
+      ]);
+
+      if (!bringInRes.ok || !moveOutRes.ok) {
+        console.error("Swap failed", bringInRes.status, moveOutRes.status);
+        alert("Swap failed. Please retry.");
+        return;
+      }
+
+      setSwapTargets((prev) => {
+        const next = { ...prev };
+        delete next[waitlistPlayer.id];
+        return next;
+      });
+      fetchPaymentsData();
+    } catch (error) {
+      console.error("Error swapping waitlist player:", error);
+      alert("Error swapping waitlist player.");
+    }
+  };
 
   useEffect(() => {
     const checkDeviceSize = () => {
@@ -413,6 +555,70 @@ function EditSoccerNow({ isEditMode = true }) {
         </div>
       )}
 
+      {isEditMode && waitlist.length > 0 && (
+        <Paper className="p-4 mb-4" style={{ backgroundColor: "#e8f5e9" }}>
+          <h3 className="text-lg font-bold mb-2">💸 Waitlist Refund / Request Links</h3>
+          <p className="text-sm text-gray-700 mb-3">
+            One-click Venmo links for each waitlist player ($7).
+          </p>
+          <div className="space-y-2">
+            {waitlist.map((player) => {
+              const playerConfig = dynamicPlayers.find(
+                (dp) => dp.name?.toLowerCase().trim() === player.name?.toLowerCase().trim()
+              );
+              const venmoHandle = playerConfig?.venmoHandle?.replace("@", "") || "";
+              const gameDateLabel = getCurrentThursdayDateLabel();
+              const refundUrl = venmoHandle
+                ? `https://venmo.com/${venmoHandle}?txn=pay&amount=7&note=${encodeURIComponent(
+                    `Soccer waitlist refund ${gameDateLabel} - ${player.name}`
+                  )}`
+                : null;
+              const requestUrl = venmoHandle
+                ? `https://venmo.com/${venmoHandle}?txn=charge&amount=7&note=${encodeURIComponent(
+                    `Soccer waitlist request ${gameDateLabel} - ${player.name}`
+                  )}`
+                : null;
+
+              return (
+                <div key={`refund-${player.id}`} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-[180px]">{player.name}</span>
+                  {venmoHandle ? (
+                    <>
+                      <a
+                        href={refundUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        @{venmoHandle}
+                      </a>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => window.open(refundUrl, "_blank")}
+                      >
+                        Refund $7
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => window.open(requestUrl, "_blank")}
+                      >
+                        Request $7
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-gray-500 italic">
+                      No Venmo handle - add in <a href="/playerConfig" className="text-blue-500 hover:underline">playerConfig</a>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Paper>
+      )}
+
       {/* Venmo Request Links for Unpaid Players */}
       {isEditMode && payments.filter(p => !p.paid).length > 0 && (
         <Paper className="p-4 mb-4" style={{ backgroundColor: '#fff3e0' }}>
@@ -566,6 +772,49 @@ function EditSoccerNow({ isEditMode = true }) {
                 )}
               </TableBody>
             </Table>
+            {isEditMode && waitlist.length > 0 && (
+              <Paper className="p-3 mt-2" style={{ backgroundColor: "#fff8e1" }}>
+                <div className="text-sm font-semibold mb-2">Manual Waitlist Actions</div>
+                <div className="space-y-1">
+                  {waitlist.map((player) => (
+                    <div key={`swap-${player.id}`} className="flex items-center gap-2 text-sm">
+                      <span className="min-w-[180px]">{player.name}</span>
+                      <Autocomplete
+                        size="small"
+                        sx={{ minWidth: 260 }}
+                        options={activePlayersForSwap}
+                        value={
+                          activePlayersForSwap.find((candidate) => candidate.id === swapTargets[player.id]) || null
+                        }
+                        onChange={(event, newValue) => {
+                          const selectedId = newValue?.id || "";
+                          setSwapTargets((prev) => ({
+                            ...prev,
+                            [player.id]: selectedId,
+                          }));
+                          if (selectedId) {
+                            handleSwapInFromWaitlist(player, selectedId);
+                          }
+                        }}
+                        getOptionLabel={(option) =>
+                          `${option.name} (${option.team === "white" ? "🏳️" : "🏴"})`
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Swap Out (filter)"
+                            placeholder="Type player name..."
+                          />
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-gray-600 mt-2">
+                  Pick who to swap out; selection applies immediately.
+                </div>
+              </Paper>
+            )}
 
           </>
         )}
@@ -573,38 +822,88 @@ function EditSoccerNow({ isEditMode = true }) {
       {isEditMode && (
         <Paper className="p-4 mt-3 mb-4" style={{ backgroundColor: "#f5f5f5" }}>
           <h3 className="text-lg font-bold mb-2">📋 Theoretical Waitlist (Read-only)</h3>
-          <p className="text-sm text-gray-700 mb-2">
-            Based only on paid players, ordered by payment time. First 16 paid are in; overflow is theoretical waitlist.
-          </p>
           {theoreticalWaitlist.length === 0 ? (
             <p className="text-sm text-green-700">No theoretical waitlist right now.</p>
           ) : (
-            <div className="space-y-1 text-sm mb-2">
-              {theoreticalWaitlist.map((player) => (
-                <div key={player.id}>
-                  #{player.theoreticalWaitlistOrder} {player.name} - paid at{" "}
-                  {timestampToReadableDate(player.theoreticalQueueTimestamp || player.date, true)}
-                </div>
-              ))}
-            </div>
+            <TableContainer component={Paper} className="mb-2">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Order</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Payment Time</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {theoreticalWaitlist.map((player, idx) => (
+                    <TableRow key={player.id || `${player.name}-${idx}`}>
+                      <TableCell>{player.theoreticalWaitlistOrder || idx + 1}</TableCell>
+                      <TableCell>{player.name}</TableCell>
+                      <TableCell>
+                        {timestampToReadableDate(
+                          player.theoreticalQueueTimestamp || player.paidAt || player.createdAt || player.date,
+                          true
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
-          {latePayersNotWaitlist.length > 0 && (
-            <details>
-              <summary style={{ cursor: "pointer" }}>
-                Show 5 extra late payers
-              </summary>
-              <div className="mt-2 space-y-1 text-sm">
-                {latePayersNotWaitlist.slice(0, 5).map((player, idx) => (
-                  <div key={player.id || `${player.name}-${idx}`}>
-                    {idx + 1}. {player.name} - paid at{" "}
-                    {timestampToReadableDate(
-                      player.latePayerTimestamp || player.paidAt || player.createdAt || player.date,
-                      true
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
+          {sortedLatePayers.length > 0 && (
+            <TableContainer component={Paper} className="mt-3">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => handleLatePayerSort("paymentTime")}
+                      >
+                        Payment Time
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => handleLatePayerSort("name")}
+                      >
+                        Name
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => handleLatePayerSort("defaultTeam")}
+                      >
+                        Default Team
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => handleLatePayerSort("currentTeam")}
+                      >
+                        Current Team
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedLatePayers.map((player, idx) => (
+                    <TableRow key={player.id || `${player.name}-${idx}`}>
+                      <TableCell>
+                        {timestampToReadableDate(player.paymentTime || player.date, true)}
+                      </TableCell>
+                      <TableCell>{player.name}</TableCell>
+                      <TableCell>{player.defaultTeam === "white" ? "🏳️ White" : "🏴 Dark"}</TableCell>
+                      <TableCell>{player.team === "white" ? "🏳️ White" : "🏴 Dark"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </Paper>
       )}
