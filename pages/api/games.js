@@ -60,7 +60,7 @@ export default async function handler(req, res) {
         
         const [playersSnapshot, paymentsSnapshot] = await Promise.all([
           playersRef.get(),
-          paymentsRef.get()
+          paymentsRef.where('money', '==', 7).get()
         ]);
         
         const allPlayers = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -115,10 +115,32 @@ export default async function handler(req, res) {
         const uniquePayments = Object.values(groupedByName).map((group) => {
           return group.find((item) => item.paid) || group[0];
         });
+
+        // Exclude manually waitlisted players
+        const activePlayers = uniquePayments.filter((item) => !item.manualWaitlist);
         
-        // Get players who are playing this week (have payments)
-        // Use case-insensitive, trimmed name matching
-        const whiteTeam = uniquePayments.filter(p => p.team === 'white').map(payment => {
+        // Split into teams
+        let whiteRoster = activePlayers.filter(p => p.team === 'white');
+        let darkRoster = activePlayers.filter(p => p.team === 'dark');
+        
+        // Apply waitlist overflow cap (max 16 active players, 8 per side ideally)
+        const totalActive = whiteRoster.length + darkRoster.length;
+        if (totalActive > 16) {
+          const getQueueTimestamp = (item) => {
+            const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
+            return parseInt(queueTs, 10) || 0;
+          };
+          const overCount = totalActive - 16;
+          const allActive = [...whiteRoster, ...darkRoster].sort(
+            (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
+          );
+          const autoWaitlisted = new Set(allActive.slice(0, overCount));
+          whiteRoster = whiteRoster.filter((item) => !autoWaitlisted.has(item));
+          darkRoster = darkRoster.filter((item) => !autoWaitlisted.has(item));
+        }
+        
+        // Enrich with ratings from player config
+        const whiteTeam = whiteRoster.map(payment => {
           const paymentName = (payment.name || '').trim().toLowerCase();
           const playerData = allPlayers.find(player => 
             (player.name || '').trim().toLowerCase() === paymentName
@@ -128,7 +150,7 @@ export default async function handler(req, res) {
           return { ...payment, rating };
         });
         
-        const darkTeam = uniquePayments.filter(p => p.team === 'dark').map(payment => {
+        const darkTeam = darkRoster.map(payment => {
           const paymentName = (payment.name || '').trim().toLowerCase();
           const playerData = allPlayers.find(player => 
             (player.name || '').trim().toLowerCase() === paymentName

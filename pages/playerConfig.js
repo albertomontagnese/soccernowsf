@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import { noCacheHeaders } from '../helpers/misc';
 
-const HARDCODED_USERNAME = "alberto";
+const HARDCODED_USERNAME = "Alberto";
 const HARDCODED_PASSWORD = "ForzaJuve+";
 
 function PlayerConfig() {
