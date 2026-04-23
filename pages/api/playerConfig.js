@@ -104,8 +104,48 @@ export default async function handler(req, res) {
       }
     }
     
+    else if (req.method === 'PATCH') {
+      const { playerName, venmoHandle } = req.body;
+      
+      if (!playerName || typeof venmoHandle !== 'string') {
+        return res.status(400).json({ message: 'playerName and venmoHandle are required' });
+      }
+
+      const clean = venmoHandle.trim().replace(/^@/, '');
+
+      if (isProduction) {
+        try {
+          const playersRef = getPlayersCollection();
+          const doc = playersRef.doc(playerName);
+          const snapshot = await doc.get();
+          
+          if (!snapshot.exists) {
+            return res.status(404).json({ message: 'Player not found' });
+          }
+          
+          await doc.update({ venmoHandle: clean, updatedAt: new Date().toISOString() });
+          return res.status(200).json({ message: 'Venmo handle updated', venmoHandle: clean });
+        } catch (dbError) {
+          console.error('Firestore patch error:', dbError);
+          return res.status(500).json({ message: 'Database error', error: dbError.message });
+        }
+      } else {
+        if (!fs.existsSync(PLAYERS_FILE_PATH)) {
+          return res.status(404).json({ message: 'Players config file not found' });
+        }
+        const data = JSON.parse(fs.readFileSync(PLAYERS_FILE_PATH, 'utf8'));
+        const player = (data.players || []).find(p => p.name === playerName);
+        if (!player) {
+          return res.status(404).json({ message: 'Player not found' });
+        }
+        player.venmoHandle = clean;
+        fs.writeFileSync(PLAYERS_FILE_PATH, JSON.stringify(data, null, 2));
+        return res.status(200).json({ message: 'Venmo handle updated', venmoHandle: clean });
+      }
+    }
+
     else {
-      res.setHeader('Allow', ['GET', 'POST']);
+      res.setHeader('Allow', ['GET', 'POST', 'PATCH']);
       return res.status(405).json({ message: `Method ${req.method} not allowed` });
     }
   } catch (error) {
