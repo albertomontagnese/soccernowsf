@@ -499,46 +499,40 @@ const fallbackPlayers = [
 // Export allPlayers for backward compatibility, but recommend using loadPlayersFromConfig
 export const allPlayers = fallbackPlayers;
 
+// Quick "Add Alberto + Keepers" base seed for a fresh week.
+//
+// teamOverridden: true on every entry is intentional — the players
+// collection in Firestore stores both keepers as `team: white`, so without
+// the override both Skinner and Gabe end up on the same team. With the
+// override the assignments below are honored verbatim, splitting the
+// keepers 1 dark / 1 white.
 export const basePlayers = [
   {
     name: "Alberto",
     money: 7,
-    date: new Date(Date.now() + 10000), // Add 10 seconds
+    date: new Date(Date.now() + 10000),
     paid: true,
     team: "white",
     goalkeeper: false,
+    teamOverridden: true,
   },
-  {
-    name: "Gavin",
-    money: 7,
-    date: new Date(Date.now() + 20000), // Add 20 seconds
-    paid: true,
-    team: "white",
-    goalkeeper: false,
-  },
-  // {
-  //   name: "Andrea",
-  //   money: 7,
-  //   date: new Date(Date.now() + 30000), // Add 30 seconds
-  //   paid: true,
-  //   team: "white",
-  //   goalkeeper: false,
-  // },
   {
     name: "Skinner",
     money: 7,
-    date: new Date(Date.now() + 40000), // Add 40 seconds
+    date: new Date(Date.now() + 40000),
     paid: true,
     team: "dark",
     goalkeeper: true,
+    teamOverridden: true,
   },
   {
     name: "Gabe",
     money: 7,
-    date: new Date(Date.now() + 50000), // Add 50 seconds
+    date: new Date(Date.now() + 50000),
     paid: true,
     team: "white",
     goalkeeper: true,
+    teamOverridden: true,
   },
 ];
 export function timestampToReadableDate(timestamp, isEditMode) {

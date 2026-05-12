@@ -542,7 +542,7 @@ function EditSoccerNow({ isEditMode = true }) {
             color="primary"
             onClick={handleAddBaseRecords}
           >
-            Add Alberto Gavin Andrea Keepers
+            Add Alberto + Keepers
           </Button>
           <Button
             className="mr-4 mb-4 w-full sm:w-auto"
