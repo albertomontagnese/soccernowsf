@@ -4,17 +4,16 @@ let firestoreClient = null;
 
 /**
  * Get or create a Firestore client singleton
- * Uses the 'soccernow' database in the 'liftmeapp-prod' project
+ * Uses the 'soccernow' database in the 'soccernow-prod' project
  */
 export function getFirestore() {
   if (firestoreClient) {
     return firestoreClient;
   }
 
-  // Configuration for Firestore
   const config = {
-    projectId: 'liftmeapp-prod',
-    databaseId: 'soccernow',
+    projectId: process.env.GCP_PROJECT_ID || 'soccernow-prod',
+    databaseId: process.env.FIRESTORE_DATABASE || 'soccernow',
   };
 
   // In production (Vercel), use GOOGLE_CREDENTIALS environment variable

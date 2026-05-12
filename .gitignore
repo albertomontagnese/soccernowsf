@@ -35,3 +35,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Service account keys
+firestore-credentials.json
