@@ -1,3 +1,4 @@
+import { getSoccerWeek, filterToWeek, latestRecordPerName, buildActiveTeams, getQueueTimestamp } from '../../helpers/soccerWeek';
 import { getPaymentsCollection, getGamesCollection, getPlayersCollection } from "../../helpers/firestoreClient";
 
 // Check if running in production (Vercel) or development
@@ -38,38 +39,16 @@ async function autoArchivePreviousGame(todayInPT, allPayments) {
     
     console.log(`📦 Auto-archiving game for ${prevThursdayId}...`);
     
-    // Calculate the previous cycle (Friday before prev Thursday to prev Thursday)
-    const prevCycleStart = new Date(prevThursday);
-    prevCycleStart.setDate(prevThursday.getDate() - 6);
-    prevCycleStart.setHours(0, 1, 0, 0);
-    
-    const prevCycleEnd = new Date(prevThursday);
-    prevCycleEnd.setHours(23, 59, 59, 999);
-    
-    const startTimestamp = prevCycleStart.getTime();
-    const endTimestamp = prevCycleEnd.getTime();
-    
-    // Filter payments for previous cycle
-    const prevCyclePayments = allPayments.filter((item) => {
-      const itemTimestamp = parseInt(item.date, 10);
-      return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
-    });
+    // Previous cycle = the soccer week that ended just before the current one started
+    const prevWeek = getSoccerWeek(new Date(getSoccerWeek().startTimestamp - 1));
+    const prevCyclePayments = filterToWeek(allPayments, prevWeek);
     
     if (prevCyclePayments.length < 4) {
       console.log(`⚠️ Only ${prevCyclePayments.length} players found for ${prevThursdayId}, skipping auto-archive`);
       return null; // Not enough players to archive
     }
     
-    // Group by name and get most recent/paid entry
-    const groupedByName = prevCyclePayments.reduce((acc, item) => {
-      acc[item.name] = acc[item.name] || [];
-      acc[item.name].push(item);
-      return acc;
-    }, {});
-    
-    const uniquePayments = Object.values(groupedByName).map((group) => {
-      return group.find((item) => item.paid) || group[0];
-    });
+    const uniquePayments = latestRecordPerName(prevCyclePayments);
     
     // Get player ratings
     const playersRef = getPlayersCollection();
@@ -148,70 +127,11 @@ export default async function user(req, res) {
     // Game is Thursday 7pm PST (19:00), cycle ends Thursday 23:59 PST  
     // New cycle starts Friday 00:01 PST
     
-    // Get current time in PST/PDT using proper timezone calculation
-    const now = new Date();
-    
-    // Get the PST offset properly - create a formatter that gives us the actual PT time components
-    const ptFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-    
-    const ptParts = ptFormatter.formatToParts(now);
-    const getPart = (type) => ptParts.find(p => p.type === type)?.value;
-    
-    const ptYear = parseInt(getPart('year'));
-    const ptMonth = parseInt(getPart('month')) - 1; // 0-indexed
-    const ptDay = parseInt(getPart('day'));
-    const ptHour = parseInt(getPart('hour'));
-    
-    // Create a date object representing "now" in PT (for day-of-week calculation)
-    const todayInPT = new Date(ptYear, ptMonth, ptDay, ptHour, 0, 0, 0);
-    const currentDayOfWeek = todayInPT.getDay(); // 0=Sunday, 5=Friday, 4=Thursday
-    
-    console.log(`Server time: ${now.toISOString()}, PT date: ${ptYear}-${ptMonth+1}-${ptDay} ${ptHour}:00 (day of week: ${currentDayOfWeek})`);
+    // Shared cycle window (Friday 00:01 PT to Thursday 23:59 PT, PST/PDT aware)
+    const week = getSoccerWeek();
+    const { todayInPT, thursdayPT, startTimestamp, endTimestamp } = week;
+    console.log(`Server time: ${new Date().toISOString()}, PT day of week: ${week.dayOfWeek}`);
 
-    // Calculate cycle based on Friday 00:01 PST transitions
-    let daysToTargetThursday;
-    if (currentDayOfWeek >= 5 || currentDayOfWeek === 0) {
-      // It's Fri/Sat/Sun - show next Thursday's game
-      daysToTargetThursday = currentDayOfWeek === 5 ? 6 : // Friday -> 6 days to Thursday
-                           currentDayOfWeek === 6 ? 5 : // Saturday -> 5 days to Thursday  
-                           4; // Sunday -> 4 days to Thursday
-    } else {
-      // It's Mon/Tue/Wed/Thu - show this Thursday's game
-      daysToTargetThursday = 4 - currentDayOfWeek; // Days to this Thursday
-    }
-
-    // Calculate Thursday game date in PT
-    const thursdayPT = new Date(ptYear, ptMonth, ptDay + daysToTargetThursday);
-    
-    // Cycle starts Friday 00:01 PT (6 days before Thursday)
-    const fridayPT = new Date(thursdayPT);
-    fridayPT.setDate(thursdayPT.getDate() - 6);
-    
-    // Now convert to UTC timestamps by accounting for PST offset (-8 hours, or -7 for PDT)
-    // PST = UTC-8, PDT = UTC-7
-    // We'll use -8 for PST (standard time in winter)
-    const PST_OFFSET_HOURS = 8; // PST is UTC-8
-    
-    // Friday 00:01 PST = Friday 08:01 UTC
-    const cycleStartUTC = Date.UTC(fridayPT.getFullYear(), fridayPT.getMonth(), fridayPT.getDate(), 
-                                    0 + PST_OFFSET_HOURS, 1, 0, 0);
-    
-    // Thursday 23:59 PST = Friday 07:59 UTC (next day)
-    const cycleEndUTC = Date.UTC(thursdayPT.getFullYear(), thursdayPT.getMonth(), thursdayPT.getDate(), 
-                                  23 + PST_OFFSET_HOURS, 59, 59, 999);
-
-    const startTimestamp = cycleStartUTC;
-    const endTimestamp = cycleEndUTC;
-    
     // For debug display
     const cycleStartFriday = new Date(startTimestamp);
     const cycleEndThursday = new Date(endTimestamp);
@@ -280,60 +200,9 @@ export default async function user(req, res) {
       console.log(`${i+1}. ${item.name} - ${new Date(itemTime).toLocaleString()} - In cycle: ${inCycle}`);
     });
 
-    // Group by name and get the most recent entry for each person
-    const groupedByName = filteredData.reduce((acc, item) => {
-      acc[item.name] = acc[item.name] || [];
-      acc[item.name].push(item);
-      return acc;
-    }, {});
-
-    let mergedData = Object.values(groupedByName).map((group) => {
-      const sortedGroup = [...group].sort(
-        (a, b) => parseInt(b.date || "0", 10) - parseInt(a.date || "0", 10)
-      );
-      return sortedGroup.find((item) => item.paid) || sortedGroup[0];
-    });
-
-    // Initialize team arrays
-    let whiteTeam = [],
-      darkTeam = [],
-      waitlist = [];
-
-    // Sort by timestamp to ensure deterministic processing
-    mergedData.sort((a, b) => parseInt(a.date || "0", 10) - parseInt(b.date || "0", 10));
-
-    const manuallyWaitlisted = mergedData.filter((item) => Boolean(item.manualWaitlist));
-    const activeCandidates = mergedData.filter((item) => !item.manualWaitlist);
-
-    // Allocate active candidates to teams
-    activeCandidates.forEach((item) => {
-      if (item.team === "white") {
-        whiteTeam.push(item);
-      } else if (item.team === "dark") {
-        darkTeam.push(item);
-      }
-    });
-
-    const getQueueTimestamp = (item) => {
-      const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
-      return parseInt(queueTs, 10) || 0;
-    };
-
-    // Handle waitlist logic: manual waitlist first, then overflow from active players.
-    const totalPlayers = whiteTeam.length + darkTeam.length;
-    let autoWaitlist = [];
-    if (totalPlayers > 16) {
-      const overCount = totalPlayers - 16;
-      const allPlayers = [...whiteTeam, ...darkTeam].sort(
-        (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
-      ); // Latest first by queue timestamp
-
-      autoWaitlist = allPlayers.slice(0, overCount);
-
-      // Remove waitlisted players from their teams
-      whiteTeam = whiteTeam.filter((item) => !autoWaitlist.includes(item));
-      darkTeam = darkTeam.filter((item) => !autoWaitlist.includes(item));
-    }
+    const { merged: mergedData, whiteTeam, darkTeam, manuallyWaitlisted, autoWaitlist } =
+      buildActiveTeams(filteredData);
+    let waitlist;
 
     waitlist = [...manuallyWaitlisted, ...autoWaitlist];
     waitlist.sort((a, b) => getQueueTimestamp(a) - getQueueTimestamp(b));

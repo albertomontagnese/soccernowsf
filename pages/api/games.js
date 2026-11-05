@@ -1,3 +1,4 @@
+import { getSoccerWeek, filterToWeek, latestRecordPerName, buildActiveTeams } from '../../helpers/soccerWeek';
 import { getGamesCollection, getPlayersCollection, getPaymentsCollection, getVotesCollection, getCommentsCollection, getFirestore } from "../../helpers/firestoreClient";
 
 /**
@@ -66,78 +67,11 @@ export default async function handler(req, res) {
         const allPlayers = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const allPayments = paymentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Calculate the soccer week cycle: Friday 00:01 PST to Thursday 23:59 PST
-        const now = new Date();
-        const todayInPT = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-        const currentDayOfWeek = todayInPT.getDay(); // 0=Sunday, 5=Friday, 4=Thursday
-
-        let daysToTargetThursday;
-        if (currentDayOfWeek >= 5 || currentDayOfWeek === 0) {
-          // It's Fri/Sat/Sun - show next Thursday's game
-          daysToTargetThursday = currentDayOfWeek === 5 ? 6 : // Friday -> 6 days to Thursday
-                               currentDayOfWeek === 6 ? 5 : // Saturday -> 5 days to Thursday  
-                               4; // Sunday -> 4 days to Thursday
-        } else {
-          // It's Mon/Tue/Wed/Thu - show this Thursday's game
-          daysToTargetThursday = 4 - currentDayOfWeek; // Days to this Thursday
-        }
-
-        // Find the current cycle's Thursday game date
-        const thursdayGameDate = new Date(todayInPT);
-        thursdayGameDate.setDate(todayInPT.getDate() + daysToTargetThursday);
-        thursdayGameDate.setHours(0, 0, 0, 0);
-
-        // Cycle starts Friday 00:01 (day after previous Thursday)
-        const cycleStartFriday = new Date(thursdayGameDate);
-        cycleStartFriday.setDate(thursdayGameDate.getDate() - 6);
-        cycleStartFriday.setHours(0, 1, 0, 0);
-
-        // Cycle ends this Thursday at 23:59
-        const cycleEndThursday = new Date(thursdayGameDate);
-        cycleEndThursday.setHours(23, 59, 59, 999);
-
-        const startTimestamp = cycleStartFriday.getTime();
-        const endTimestamp = cycleEndThursday.getTime();
-
-        // Filter payments to current soccer week cycle
-        const payments = allPayments.filter((item) => {
-          const itemTimestamp = parseInt(item.date, 10);
-          return itemTimestamp >= startTimestamp && itemTimestamp <= endTimestamp;
-        });
-
-        // Group by name and get the most recent entry for each person
-        const groupedByName = payments.reduce((acc, item) => {
-          acc[item.name] = acc[item.name] || [];
-          acc[item.name].push(item);
-          return acc;
-        }, {});
-
-        const uniquePayments = Object.values(groupedByName).map((group) => {
-          return group.find((item) => item.paid) || group[0];
-        });
-
-        // Exclude manually waitlisted players
-        const activePlayers = uniquePayments.filter((item) => !item.manualWaitlist);
-        
-        // Split into teams
-        let whiteRoster = activePlayers.filter(p => p.team === 'white');
-        let darkRoster = activePlayers.filter(p => p.team === 'dark');
-        
-        // Apply waitlist overflow cap (max 16 active players, 8 per side ideally)
-        const totalActive = whiteRoster.length + darkRoster.length;
-        if (totalActive > 16) {
-          const getQueueTimestamp = (item) => {
-            const queueTs = item?.paidAt || item?.createdAt || item?.date || item?.id || 0;
-            return parseInt(queueTs, 10) || 0;
-          };
-          const overCount = totalActive - 16;
-          const allActive = [...whiteRoster, ...darkRoster].sort(
-            (a, b) => getQueueTimestamp(b) - getQueueTimestamp(a)
-          );
-          const autoWaitlisted = new Set(allActive.slice(0, overCount));
-          whiteRoster = whiteRoster.filter((item) => !autoWaitlisted.has(item));
-          darkRoster = darkRoster.filter((item) => !autoWaitlisted.has(item));
-        }
+        // Same week window, dedupe and 16-player cap as /api/soccernowAllPayments
+        const week = getSoccerWeek();
+        const { whiteTeam: whiteRoster, darkTeam: darkRoster } = buildActiveTeams(
+          filterToWeek(allPayments, week)
+        );
         
         // Enrich with ratings from player config
         const whiteTeam = whiteRoster.map(payment => {
@@ -224,20 +158,10 @@ export default async function handler(req, res) {
           return res.status(400).json({ message: 'Game already archived for this date', game: existingGame.data() });
         }
         
-        // Calculate the cycle for the target date (Friday before to Thursday)
-        const targetThursday = new Date(targetDate + 'T12:00:00');
-        
-        // Cycle starts Friday 00:01 (6 days before Thursday)
-        const cycleStartFriday = new Date(targetThursday);
-        cycleStartFriday.setDate(targetThursday.getDate() - 6);
-        cycleStartFriday.setHours(0, 1, 0, 0);
-        
-        // Cycle ends Thursday 23:59
-        const cycleEndThursday = new Date(targetThursday);
-        cycleEndThursday.setHours(23, 59, 59, 999);
-        
-        const startTimestamp = cycleStartFriday.getTime();
-        const endTimestamp = cycleEndThursday.getTime();
+        // Soccer week (Fri 00:01 PT to Thu 23:59 PT) that ends on the target Thursday
+        const { startTimestamp, endTimestamp } = getSoccerWeek(new Date(targetDate + 'T20:00:00Z'));
+        const cycleStartFriday = new Date(startTimestamp);
+        const cycleEndThursday = new Date(endTimestamp);
         
         console.log(`Archiving game for ${targetDate}, cycle: ${cycleStartFriday} to ${cycleEndThursday}`);
         
@@ -262,16 +186,7 @@ export default async function handler(req, res) {
           });
         }
         
-        // Group by name and get most recent/paid entry
-        const groupedByName = payments.reduce((acc, item) => {
-          acc[item.name] = acc[item.name] || [];
-          acc[item.name].push(item);
-          return acc;
-        }, {});
-        
-        const uniquePayments = Object.values(groupedByName).map((group) => {
-          return group.find((item) => item.paid) || group[0];
-        });
+        const uniquePayments = latestRecordPerName(payments);
         
         // Build rosters with ratings (using case-insensitive matching)
         const whiteRoster = uniquePayments.filter(p => p.team === 'white').map(payment => {
