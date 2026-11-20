@@ -76,7 +76,7 @@ function getCurrentCycleWindowUtc() {
 
 export default async function updateUser(req, res) {
   try {
-    let { id, name, money, date, paid, team, goalkeeper, teamOverridden, manualWaitlist } = req.body;
+    let { id, name, money, date, paid, team, goalkeeper, teamOverridden, manualWaitlist, paymentMethod } = req.body;
     // for any of this if it's undefined make it = "". paid make it false
 
     const newId = id ? id : dateToTimestamp(date);
@@ -166,6 +166,10 @@ export default async function updateUser(req, res) {
         lastEditedAt: nowIso,
         createdByApiAt: existingRecord?.createdByApiAt || nowIso,
       };
+      // Optional source of the payment ("Venmo", "Zelle"); only stored when sent.
+      if (typeof paymentMethod === "string" && paymentMethod.trim()) {
+        updatedUserData.paymentMethod = paymentMethod.trim();
+      }
 
       console.log("data to be stored");
       console.log(updatedUserData);
